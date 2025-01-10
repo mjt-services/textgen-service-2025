@@ -1,0 +1,30 @@
+{
+  "name": "@mjt-services/textgen-service-2025",
+  "version": "2025.1.10-1006",
+  "sideEffects": false,
+  "description": "textgen service code",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "docs": "typedoc src/index.ts",
+    "build": "tsc -b",
+    "build-docs": "pnpm run build && pnpm run docs",
+    "changelog": "./scripts/changes.sh > CHANGELOG.md",
+    "changelog-version": "pnpm run changelog && ./scripts/version.sh",
+    "publish": "pnpm run build-docs && pnpm run changelog-version"
+  },
+  "keywords": [],
+  "author": "Matt Taylor (https://mjt.dev)",
+  "license": "MIT",
+  "dependencies": {
+    "@mjt-engine/assert": "github:mjt-engine/assert",
+    "@mjt-engine/message": "github:mjt-engine/message",
+    "@mjt-engine/object": "github:mjt-engine/object",
+    "@mjt-engine/parse": "github:mjt-engine/parse",
+    "@mjt-services/textgen-common-2025": "github:mjt-services/textgen-common-2025"
+  },
+  "devDependencies": {
+    "typedoc": "^0.27.6",
+    "typescript": "^5.4.5"
+  }
+}
