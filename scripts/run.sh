@@ -11,8 +11,8 @@ fi
 
 docker stop "${NAME}" || true
 
-# docker run -it --rm -d \
-docker run -it --rm \
+# docker run -it --rm \
+docker run -it --rm -d \
   --name "${NAME}" \
   --network "${NETWORK_NAME}" \
   --env-file "${SCRIPT_DIR}/../.env" \
