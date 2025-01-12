@@ -15,6 +15,7 @@ export const initConnection = async (env: Env) => {
     },
     options: { log: console.log },
     server: [url],
+    token: env.NATS_AUTH_TOKEN,
     env,
   });
   console.log("initConnection: init complete");

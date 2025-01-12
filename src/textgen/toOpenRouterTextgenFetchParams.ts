@@ -13,7 +13,7 @@ export const toOpenRouterTextgenFetchParams = ({
 }) => {
   console.log("toOpenRouterTextgenFetchParams: env", env);
   const {
-    authToken = env.OPEN_ROUTER_AUTHTOKEN,
+    authToken = env.OPEN_ROUTER_AUTH_TOKEN,
     url = "https://openrouter.ai/api/v1/chat/completions",
   } = headers;
 

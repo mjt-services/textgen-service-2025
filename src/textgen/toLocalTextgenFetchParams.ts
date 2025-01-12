@@ -13,7 +13,7 @@ export const toLocalTextgenFetchParams = ({
 }) => {
   const { options } = request;
   const {
-    authToken = env.LOCAL_AUTHTOKEN,
+    authToken = env.LOCAL_AUTH_TOKEN,
     url = options?.promptStyle === "raw"
       ? "http://10.0.0.9:5000/v1/completions"
       : "http://10.0.0.9:5000/v1/chat/completions",

@@ -1,1 +1,0 @@
-{"version":3,"file":"logDebug.js","sourceRoot":"","sources":["../../src/textgen/logDebug.ts"],"names":[],"mappings":"AACA,MAAM,CAAC,MAAM,QAAQ,GAAG,CAAC,GAAG,IAAe,EAAE,EAAE;IAC7C,OAAO,CAAC,GAAG,CAAC,GAAG,IAAI,CAAC,CAAC;AACvB,CAAC,CAAC","sourcesContent":["\nexport const logDebug = (...args: unknown[]) => {\n  console.log(...args);\n};\n"]}

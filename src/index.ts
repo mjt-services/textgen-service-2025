@@ -1,11 +1,8 @@
-// import { loadEnvStatic } from "./loadEnvStatic";
-import { loadEnv } from "./loadEnvDeno";
 import { main } from "./main";
 
 (async () => {
   try {
-    // await import("dotenv/config");
-    const env = await loadEnv();
+    const env = Deno.env.toObject();
     console.log(JSON.stringify(env, null, 2));
     main(env);
   } catch (error) {
