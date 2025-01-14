@@ -1,6 +1,6 @@
 {
   "name": "@mjt-services/textgen-service-2025",
-  "version": "2025.1.12-1102",
+  "version": "2025.1.14-1121",
   "sideEffects": false,
   "description": "textgen service code",
   "main": "./dist/index.js",
