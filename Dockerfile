@@ -1,14 +1,23 @@
-# Use the official Deno image as the base image
-FROM denoland/deno:alpine-2.0.0
+# Use the latest Node.js Alpine as the base image
+FROM node:alpine AS base
 
 # Set the working directory
 WORKDIR /app
 
-# Copy the built distributable files into the container
-COPY dist ./dist
+# Install pnpm globally
+RUN npm install -g pnpm
 
-# Expose the port the app runs on
-EXPOSE 8000
+# Install OpenSSH client for SSH tunneling
+RUN apk add --no-cache openssh-client
 
-# Command to run the application
-CMD ["deno", "run", "--allow-net", "--allow-env", "--allow-read", "./dist/index.js"]
+# Copy package manager lockfile and configuration files
+COPY pnpm-lock.yaml package.json tsconfig.json ./
+
+# Install Node.js dependencies with pnpm, respecting the lockfile
+RUN pnpm install --frozen-lockfile
+
+# Copy the rest of the application source code
+COPY src ./src
+
+# Default command to run the application
+CMD ["pnpm", "start"]

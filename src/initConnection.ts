@@ -4,12 +4,13 @@ import type { Env } from "./Env";
 import { textgenGenerateListener } from "./textgen/textgenGenerateListener";
 import type { TextgenConnectionMap } from "@mjt-services/textgen-common-2025";
 import { assertValue } from "@mjt-engine/assert";
+import { getEnv } from "./getEnv";
 
-export const initConnection = async (env: Env) => {
+export const initConnection = async () => {
+  const env = getEnv();
   const url = assertValue(env.NATS_URL);
   console.log("NATS_URL", url);
-
-  await Messages.createConnection<TextgenConnectionMap, Env>({
+  const con = await Messages.createConnection<TextgenConnectionMap, Env>({
     subscribers: {
       "textgen.generate": textgenGenerateListener,
     },
@@ -19,4 +20,5 @@ export const initConnection = async (env: Env) => {
     env,
   });
   console.log("initConnection: init complete");
+  return con;
 };

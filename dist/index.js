@@ -1,111 +1,2656 @@
+const ALGORITHM_BYTE_LENGTHS = {
+    "SHA-256": 32,
+    "SHA-512": 64,
+};
+
+const ALL_ALGORITHMS = ["SHA-256", "SHA-512"];
+
+function toMessage(message) {
+    if (typeof message === "string") {
+        return message;
+    }
+    const messageMaybe = message();
+    if (typeof messageMaybe === "string") {
+        return messageMaybe;
+    }
+    console.error("ASSERTION FAIL VALUE", messageMaybe);
+    return "Assertion Failed";
+}
+
+function assert$1(value, message = "Assertion failed") {
+    if (!value) {
+        throw new Error(toMessage(message));
+    }
+}
+
+const assertEqualElements = (a, b, message = () => {
+    console.error(a, b);
+    return `Assertion failed: ${JSON.stringify(a)} is not equal to ${JSON.stringify(b)}`;
+}) => {
+    throw new Error("assertEqualElements: Bitrotted");
+    // if (a === b) {
+    //   return true;
+    // }
+    // if (!a || !b) {
+    //   return false;
+    // }
+    // const [aLength, bLength] = [lengthOf(a), lengthOf(b)];
+    // assertEqual(
+    //   aLength,
+    //   bLength,
+    //   message ||
+    //     `Assertion failed: array length ${aLength} not equal to ${bLength}`
+    // );
+    // for (let i = 0; i < aLength; i++) {
+    //   const aElement = a[i];
+    //   const bElement = b[i];
+    //   if (Array.isArray(aElement) && Array.isArray(bElement)) {
+    //     assertEqualElements(aElement, bElement, message);
+    //   } else {
+    //     assertEqual(
+    //       toStableValue(aElement),
+    //       toStableValue(bElement),
+    //       message ||
+    //         `Assertion failed: at index: a[${i}]=>${JSON.stringify(
+    //           aElement
+    //         )} not equal to b[${i}]=>${JSON.stringify(bElement)}`
+    //     );
+    //   }
+    // }
+};
+
+const assertEqual = (a, b, message = () => {
+    console.error(a, b);
+    return `Assertion failed: ${JSON.stringify(a)} is not equal to ${JSON.stringify(b)}`;
+}) => {
+    if (Array.isArray(a) && Array.isArray(b)) {
+        return assertEqualElements(a, b, message);
+    }
+    return assert$1(a === b, message);
+};
+
+const assertNotEqual = (a, b, message = () => {
+    console.error(a, b);
+    return `Assertion failed: ${JSON.stringify(a)} is equal to ${JSON.stringify(b)}`;
+}) => {
+    // if (Array.isArray(a) && Array.isArray(b)) {
+    //   return assertEqualElements(a, b, message);
+    // }
+    return assert$1(a !== b, message);
+};
+
+function assertType(value, typeGuard, message = "Assertion failed: Required value is not of correct type") {
+    if (!typeGuard(value)) {
+        throw new Error(toMessage(message));
+    }
+    return value;
+}
+
+function assertUnreachable(value, message = "Assertion failed: Reached what should be an unreachable section of code") {
+    throw new Error(toMessage(message));
+}
+
+function isValue(maybe) {
+    return maybe !== undefined && maybe !== null && !Number.isNaN(maybe);
+}
+
+function assertValue$1(maybe, message = "Assertion failed: Required value not defined") {
+    assert$1(isValue(maybe), message);
+    return maybe;
+}
+
+const Asserts = {
+    assert: assert$1,
+    assertUnreachable,
+    assertValue: assertValue$1,
+    assertEqual,
+    assertNotEqual,
+    assertEqualElements,
+    assertType,
+};
+
+const { assertValue} = Asserts;
+
+const arrayToFloat64Array = (arr) => {
+    const numbers = arr.flatMap((v) => {
+        if (typeof v === "number") {
+            return [v];
+        }
+        return JSON.stringify(v)
+            .split("")
+            .map((s) => s.codePointAt(0));
+    });
+    return new Float64Array(numbers.length).map((_, i) => numbers[i]);
+};
+
+const toArrayBuffer = async (bytes) => {
+    if (bytes instanceof ArrayBuffer) {
+        return bytes;
+    }
+    if (bytes instanceof Blob) {
+        return bytes.arrayBuffer();
+    }
+    if (typeof bytes === "string") {
+        const encoder = new TextEncoder();
+        return encoder.encode(bytes);
+    }
+    if (ArrayBuffer.isView(bytes)) {
+        return bytes.buffer;
+    }
+    if (Array.isArray(bytes)) {
+        return arrayToFloat64Array(bytes);
+    }
+    return new ArrayBuffer(0);
+};
+
+const hashOf = async ({ bytes, algorithm = "SHA-512", }) => {
+    const buffer = await toArrayBuffer(bytes);
+    return crypto.subtle.digest(algorithm, buffer);
+};
+
+// @see https://stackoverflow.com/questions/40031688/javascript-arraybuffer-to-hex
+const encodeAsString = async (bytes, radix = 16) => {
+    const arr = await toArrayBuffer(bytes);
+    return [...new Uint8Array(arr)]
+        .map((x) => x.toString(radix).padStart(2, "0"))
+        .join("");
+};
+
+const addressStringOf = async ({ bytes, algorithm = "SHA-512", radix = 16, }) => {
+    const idRaw = await hashOf({ bytes: bytes, algorithm });
+    const encoded = await encodeAsString(idRaw, radix);
+    return `${algorithm}:${encoded}`;
+};
+
+const idStringToIdBytes = ({ id }) => {
+    const splitValue = id.split(":");
+    Asserts.assert(splitValue.length === 2);
+    // TODO only SHA FOR NOW
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const [algorithm, base64] = splitValue;
+    const binaryString = atob(base64);
+    const result = new Uint8Array(binaryString.length);
+    binaryString
+        .split("")
+        .map((s) => s.charCodeAt(0))
+        .forEach((b, i) => {
+        result[i] = b;
+    });
+    return result;
+};
+
+const toText = async (bytes) => {
+    if (typeof bytes === "string") {
+        return bytes;
+    }
+    const arr = await toArrayBuffer(bytes);
+    const decoder = new TextDecoder();
+    return decoder.decode(arr);
+};
+
+// eslint-disable-next-line @typescript-eslint/ban-types
+const TESTS = [];
+TESTS.push(async () => {
+    const data = "test";
+    const arr = await toArrayBuffer(data);
+    const actual = await toText(arr);
+    return Asserts.assertEqual(data, actual);
+});
+TESTS.push(async () => {
+    return ALL_ALGORITHMS.map(async (algorithm) => {
+        const actual = await hashOf({ bytes: "test", algorithm });
+        return Asserts.assertEqual(actual.byteLength, ALGORITHM_BYTE_LENGTHS[algorithm]);
+    });
+});
+TESTS.push(async () => {
+    {
+        const actual = await addressStringOf({
+            bytes: "test",
+            algorithm: "SHA-256",
+        });
+        Asserts.assertEqual(actual, "SHA-256:n4bQgYhMfWWaL+qgxVrQFaO/TxsrC4Is0V1sFbDwCgg=");
+    }
+    {
+        const actual = await addressStringOf({
+            bytes: "test",
+            algorithm: "SHA-512",
+        });
+        Asserts.assertEqual(actual, "SHA-512:7iaw3Ur350mqGo7jwQrpkj9hiYB3Lkc/iBml1JQODbJ6wYX4oOHV+E+IvIh/1nsUNzLDBMxfqa2Ob1f1ACio/w==");
+    }
+});
+TESTS.push(async () => {
+    return ALL_ALGORITHMS.map(async (algorithm) => {
+        const data = "test";
+        const id = await addressStringOf({ bytes: data, algorithm });
+        const idBytesExpected = new Uint8Array(await hashOf({ bytes: data, algorithm }));
+        const idBytes = idStringToIdBytes({ id });
+        return Asserts.assertEqualElements(idBytes, idBytesExpected);
+    });
+});
+const test = async () => {
+    const results = await Promise.all(TESTS.map(async (test) => {
+        try {
+            await test();
+            return true;
+        }
+        catch (error) {
+            console.error(error);
+            return false;
+        }
+    }));
+    if (results.find((v) => v === false)) {
+        throw new Error("TESTS FAILED");
+    }
+    console.log("TESTS PASS");
+    return true;
+};
+
+function arrayBufferToBase64(arrayBuffer) {
+    // need to clone array buffer to avoice 'detached' error
+    const uint8Array = new Uint8Array(arrayBuffer.slice(0));
+    let binaryString = "";
+    for (let i = 0; i < uint8Array.length; i++) {
+        binaryString += String.fromCharCode(uint8Array[i]);
+    }
+    return btoa(binaryString);
+}
+
+const arrayBufferToHex = (input) => {
+    const inputUint8Array = new Uint8Array(input);
+    const output = [];
+    for (let i = 0; i < inputUint8Array.length; ++i) {
+        output.push(inputUint8Array[i].toString(16).padStart(2, "0"));
+    }
+    return output.join("");
+};
+
+const arrayBufferToUtf8 = (input) => new TextDecoder().decode(new Uint8Array(input));
+
+const assignMediaTypeToBlob = (blob, mediaType) => {
+    return blob.slice(0, blob.size, mediaType);
+};
+
+const base64ToArrayBuffer = (input) => {
+    // Decode base64 string to a binary string.
+    const binaryString = globalThis.atob(input);
+    // Create a new ArrayBuffer with the same length as the binary string.
+    const length = binaryString.length;
+    const bytes = new Uint8Array(length);
+    // Iterate over each character in the binary string and fill the Uint8Array.
+    for (let i = 0; i < length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    // The Uint8Array is backed by the ArrayBuffer, which we return.
+    return bytes.buffer;
+};
+
+const dataUrlToBlob = (dataUrl) => {
+    if (!dataUrl) {
+        return;
+    }
+    const arr = dataUrl.split(",");
+    const match = arr[0].match(/:(.*?);/) ?? [];
+    const mime = match[1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+};
+
+const immediateToArrayBuffer = (bytes) => {
+    if (bytes instanceof ArrayBuffer) {
+        return bytes;
+    }
+    if (typeof bytes === "string") {
+        const encoder = new TextEncoder();
+        return encoder.encode(bytes);
+    }
+    if (ArrayBuffer.isView(bytes)) {
+        return bytes.buffer;
+    }
+    if (Array.isArray(bytes)) {
+        return arrayToFloat64Array(bytes);
+    }
+    return new ArrayBuffer(0);
+};
+
+const immediateHashOf = async (bytes, algorithm) => {
+    const buffer = immediateToArrayBuffer(bytes);
+    return crypto.subtle.digest(algorithm, buffer);
+};
+
+const isImmediateByteLike = (maybe) => {
+    const straw = maybe;
+    if (straw instanceof ArrayBuffer) {
+        return true;
+    }
+    if (typeof straw === "string") {
+        return true;
+    }
+    if (ArrayBuffer.isView(straw)) {
+        return true;
+    }
+    if (Array.isArray(straw)) {
+        return true;
+    }
+    return false;
+};
+
+const isByteLike = (maybe) => {
+    if (maybe instanceof Blob) {
+        return true;
+    }
+    return isImmediateByteLike(maybe);
+};
+
+const lengthOf = (bytes) => {
+    if (typeof bytes === "string") {
+        return bytes.length;
+    }
+    if (bytes instanceof Blob) {
+        return bytes.size;
+    }
+    if (bytes instanceof ArrayBuffer) {
+        return bytes.byteLength;
+    }
+    if (ArrayBuffer.isView(bytes)) {
+        return bytes.byteLength;
+    }
+};
+
+var decoder$1;
+try {
+	decoder$1 = new TextDecoder();
+} catch(error) {}
+var src;
+var srcEnd;
+var position$1 = 0;
+var currentUnpackr = {};
+var currentStructures;
+var srcString;
+var srcStringStart = 0;
+var srcStringEnd = 0;
+var bundledStrings$1;
+var referenceMap;
+var currentExtensions = [];
+var dataView;
+var defaultOptions$1 = {
+	useRecords: false,
+	mapsAsObjects: true
+};
+class C1Type {}
+const C1 = new C1Type();
+C1.name = 'MessagePack 0xC1';
+var sequentialMode = false;
+var inlineObjectReadThreshold = 2;
+var readStruct;
+// no-eval build
+try {
+	new Function('');
+} catch(error) {
+	// if eval variants are not supported, do not create inline object readers ever
+	inlineObjectReadThreshold = Infinity;
+}
+
+class Unpackr {
+	constructor(options) {
+		if (options) {
+			if (options.useRecords === false && options.mapsAsObjects === undefined)
+				options.mapsAsObjects = true;
+			if (options.sequential && options.trusted !== false) {
+				options.trusted = true;
+				if (!options.structures && options.useRecords != false) {
+					options.structures = [];
+					if (!options.maxSharedStructures)
+						options.maxSharedStructures = 0;
+				}
+			}
+			if (options.structures)
+				options.structures.sharedLength = options.structures.length;
+			else if (options.getStructures) {
+				(options.structures = []).uninitialized = true; // this is what we use to denote an uninitialized structures
+				options.structures.sharedLength = 0;
+			}
+			if (options.int64AsNumber) {
+				options.int64AsType = 'number';
+			}
+		}
+		Object.assign(this, options);
+	}
+	unpack(source, options) {
+		if (src) {
+			// re-entrant execution, save the state and restore it after we do this unpack
+			return saveState(() => {
+				clearSource();
+				return this ? this.unpack(source, options) : Unpackr.prototype.unpack.call(defaultOptions$1, source, options)
+			})
+		}
+		if (!source.buffer && source.constructor === ArrayBuffer)
+			source = typeof Buffer !== 'undefined' ? Buffer.from(source) : new Uint8Array(source);
+		if (typeof options === 'object') {
+			srcEnd = options.end || source.length;
+			position$1 = options.start || 0;
+		} else {
+			position$1 = 0;
+			srcEnd = options > -1 ? options : source.length;
+		}
+		srcStringEnd = 0;
+		srcString = null;
+		bundledStrings$1 = null;
+		src = source;
+		// this provides cached access to the data view for a buffer if it is getting reused, which is a recommend
+		// technique for getting data from a database where it can be copied into an existing buffer instead of creating
+		// new ones
+		try {
+			dataView = source.dataView || (source.dataView = new DataView(source.buffer, source.byteOffset, source.byteLength));
+		} catch(error) {
+			// if it doesn't have a buffer, maybe it is the wrong type of object
+			src = null;
+			if (source instanceof Uint8Array)
+				throw error
+			throw new Error('Source must be a Uint8Array or Buffer but was a ' + ((source && typeof source == 'object') ? source.constructor.name : typeof source))
+		}
+		if (this instanceof Unpackr) {
+			currentUnpackr = this;
+			if (this.structures) {
+				currentStructures = this.structures;
+				return checkedRead(options)
+			} else if (!currentStructures || currentStructures.length > 0) {
+				currentStructures = [];
+			}
+		} else {
+			currentUnpackr = defaultOptions$1;
+			if (!currentStructures || currentStructures.length > 0)
+				currentStructures = [];
+		}
+		return checkedRead(options)
+	}
+	unpackMultiple(source, forEach) {
+		let values, lastPosition = 0;
+		try {
+			sequentialMode = true;
+			let size = source.length;
+			let value = this ? this.unpack(source, size) : defaultUnpackr.unpack(source, size);
+			if (forEach) {
+				if (forEach(value, lastPosition, position$1) === false) return;
+				while(position$1 < size) {
+					lastPosition = position$1;
+					if (forEach(checkedRead(), lastPosition, position$1) === false) {
+						return
+					}
+				}
+			}
+			else {
+				values = [ value ];
+				while(position$1 < size) {
+					lastPosition = position$1;
+					values.push(checkedRead());
+				}
+				return values
+			}
+		} catch(error) {
+			error.lastPosition = lastPosition;
+			error.values = values;
+			throw error
+		} finally {
+			sequentialMode = false;
+			clearSource();
+		}
+	}
+	_mergeStructures(loadedStructures, existingStructures) {
+		loadedStructures = loadedStructures || [];
+		if (Object.isFrozen(loadedStructures))
+			loadedStructures = loadedStructures.map(structure => structure.slice(0));
+		for (let i = 0, l = loadedStructures.length; i < l; i++) {
+			let structure = loadedStructures[i];
+			if (structure) {
+				structure.isShared = true;
+				if (i >= 32)
+					structure.highByte = (i - 32) >> 5;
+			}
+		}
+		loadedStructures.sharedLength = loadedStructures.length;
+		for (let id in existingStructures || []) {
+			if (id >= 0) {
+				let structure = loadedStructures[id];
+				let existing = existingStructures[id];
+				if (existing) {
+					if (structure)
+						(loadedStructures.restoreStructures || (loadedStructures.restoreStructures = []))[id] = structure;
+					loadedStructures[id] = existing;
+				}
+			}
+		}
+		return this.structures = loadedStructures
+	}
+	decode(source, options) {
+		return this.unpack(source, options)
+	}
+}
+function checkedRead(options) {
+	try {
+		if (!currentUnpackr.trusted && !sequentialMode) {
+			let sharedLength = currentStructures.sharedLength || 0;
+			if (sharedLength < currentStructures.length)
+				currentStructures.length = sharedLength;
+		}
+		let result;
+		if (currentUnpackr.randomAccessStructure && src[position$1] < 0x40 && src[position$1] >= 0x20 && readStruct) ; else
+			result = read();
+		if (bundledStrings$1) { // bundled strings to skip past
+			position$1 = bundledStrings$1.postBundlePosition;
+			bundledStrings$1 = null;
+		}
+		if (sequentialMode)
+			// we only need to restore the structures if there was an error, but if we completed a read,
+			// we can clear this out and keep the structures we read
+			currentStructures.restoreStructures = null;
+
+		if (position$1 == srcEnd) {
+			// finished reading this source, cleanup references
+			if (currentStructures && currentStructures.restoreStructures)
+				restoreStructures();
+			currentStructures = null;
+			src = null;
+			if (referenceMap)
+				referenceMap = null;
+		} else if (position$1 > srcEnd) {
+			// over read
+			throw new Error('Unexpected end of MessagePack data')
+		} else if (!sequentialMode) {
+			let jsonView;
+			try {
+				jsonView = JSON.stringify(result, (_, value) => typeof value === "bigint" ? `${value}n` : value).slice(0, 100);
+			} catch(error) {
+				jsonView = '(JSON view not available ' + error + ')';
+			}
+			throw new Error('Data read, but end of buffer not reached ' + jsonView)
+		}
+		// else more to read, but we are reading sequentially, so don't clear source yet
+		return result
+	} catch(error) {
+		if (currentStructures && currentStructures.restoreStructures)
+			restoreStructures();
+		clearSource();
+		if (error instanceof RangeError || error.message.startsWith('Unexpected end of buffer') || position$1 > srcEnd) {
+			error.incomplete = true;
+		}
+		throw error
+	}
+}
+
+function restoreStructures() {
+	for (let id in currentStructures.restoreStructures) {
+		currentStructures[id] = currentStructures.restoreStructures[id];
+	}
+	currentStructures.restoreStructures = null;
+}
+
+function read() {
+	let token = src[position$1++];
+	if (token < 0xa0) {
+		if (token < 0x80) {
+			if (token < 0x40)
+				return token
+			else {
+				let structure = currentStructures[token & 0x3f] ||
+					currentUnpackr.getStructures && loadStructures()[token & 0x3f];
+				if (structure) {
+					if (!structure.read) {
+						structure.read = createStructureReader(structure, token & 0x3f);
+					}
+					return structure.read()
+				} else
+					return token
+			}
+		} else if (token < 0x90) {
+			// map
+			token -= 0x80;
+			if (currentUnpackr.mapsAsObjects) {
+				let object = {};
+				for (let i = 0; i < token; i++) {
+					let key = readKey();
+					if (key === '__proto__')
+						key = '__proto_';
+					object[key] = read();
+				}
+				return object
+			} else {
+				let map = new Map();
+				for (let i = 0; i < token; i++) {
+					map.set(read(), read());
+				}
+				return map
+			}
+		} else {
+			token -= 0x90;
+			let array = new Array(token);
+			for (let i = 0; i < token; i++) {
+				array[i] = read();
+			}
+			if (currentUnpackr.freezeData)
+				return Object.freeze(array)
+			return array
+		}
+	} else if (token < 0xc0) {
+		// fixstr
+		let length = token - 0xa0;
+		if (srcStringEnd >= position$1) {
+			return srcString.slice(position$1 - srcStringStart, (position$1 += length) - srcStringStart)
+		}
+		if (srcStringEnd == 0 && srcEnd < 140) {
+			// for small blocks, avoiding the overhead of the extract call is helpful
+			let string = length < 16 ? shortStringInJS(length) : longStringInJS(length);
+			if (string != null)
+				return string
+		}
+		return readFixedString(length)
+	} else {
+		let value;
+		switch (token) {
+			case 0xc0: return null
+			case 0xc1:
+				if (bundledStrings$1) {
+					value = read(); // followed by the length of the string in characters (not bytes!)
+					if (value > 0)
+						return bundledStrings$1[1].slice(bundledStrings$1.position1, bundledStrings$1.position1 += value)
+					else
+						return bundledStrings$1[0].slice(bundledStrings$1.position0, bundledStrings$1.position0 -= value)
+				}
+				return C1; // "never-used", return special object to denote that
+			case 0xc2: return false
+			case 0xc3: return true
+			case 0xc4:
+				// bin 8
+				value = src[position$1++];
+				if (value === undefined)
+					throw new Error('Unexpected end of buffer')
+				return readBin(value)
+			case 0xc5:
+				// bin 16
+				value = dataView.getUint16(position$1);
+				position$1 += 2;
+				return readBin(value)
+			case 0xc6:
+				// bin 32
+				value = dataView.getUint32(position$1);
+				position$1 += 4;
+				return readBin(value)
+			case 0xc7:
+				// ext 8
+				return readExt(src[position$1++])
+			case 0xc8:
+				// ext 16
+				value = dataView.getUint16(position$1);
+				position$1 += 2;
+				return readExt(value)
+			case 0xc9:
+				// ext 32
+				value = dataView.getUint32(position$1);
+				position$1 += 4;
+				return readExt(value)
+			case 0xca:
+				value = dataView.getFloat32(position$1);
+				if (currentUnpackr.useFloat32 > 2) {
+					// this does rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
+					let multiplier = mult10[((src[position$1] & 0x7f) << 1) | (src[position$1 + 1] >> 7)];
+					position$1 += 4;
+					return ((multiplier * value + (value > 0 ? 0.5 : -0.5)) >> 0) / multiplier
+				}
+				position$1 += 4;
+				return value
+			case 0xcb:
+				value = dataView.getFloat64(position$1);
+				position$1 += 8;
+				return value
+			// uint handlers
+			case 0xcc:
+				return src[position$1++]
+			case 0xcd:
+				value = dataView.getUint16(position$1);
+				position$1 += 2;
+				return value
+			case 0xce:
+				value = dataView.getUint32(position$1);
+				position$1 += 4;
+				return value
+			case 0xcf:
+				if (currentUnpackr.int64AsType === 'number') {
+					value = dataView.getUint32(position$1) * 0x100000000;
+					value += dataView.getUint32(position$1 + 4);
+				} else if (currentUnpackr.int64AsType === 'string') {
+					value = dataView.getBigUint64(position$1).toString();
+				} else if (currentUnpackr.int64AsType === 'auto') {
+					value = dataView.getBigUint64(position$1);
+					if (value<=BigInt(2)<<BigInt(52)) value=Number(value);
+				} else
+					value = dataView.getBigUint64(position$1);
+				position$1 += 8;
+				return value
+
+			// int handlers
+			case 0xd0:
+				return dataView.getInt8(position$1++)
+			case 0xd1:
+				value = dataView.getInt16(position$1);
+				position$1 += 2;
+				return value
+			case 0xd2:
+				value = dataView.getInt32(position$1);
+				position$1 += 4;
+				return value
+			case 0xd3:
+				if (currentUnpackr.int64AsType === 'number') {
+					value = dataView.getInt32(position$1) * 0x100000000;
+					value += dataView.getUint32(position$1 + 4);
+				} else if (currentUnpackr.int64AsType === 'string') {
+					value = dataView.getBigInt64(position$1).toString();
+				} else if (currentUnpackr.int64AsType === 'auto') {
+					value = dataView.getBigInt64(position$1);
+					if (value>=BigInt(-2)<<BigInt(52)&&value<=BigInt(2)<<BigInt(52)) value=Number(value);
+				} else
+					value = dataView.getBigInt64(position$1);
+				position$1 += 8;
+				return value
+
+			case 0xd4:
+				// fixext 1
+				value = src[position$1++];
+				if (value == 0x72) {
+					return recordDefinition(src[position$1++] & 0x3f)
+				} else {
+					let extension = currentExtensions[value];
+					if (extension) {
+						if (extension.read) {
+							position$1++; // skip filler byte
+							return extension.read(read())
+						} else if (extension.noBuffer) {
+							position$1++; // skip filler byte
+							return extension()
+						} else
+							return extension(src.subarray(position$1, ++position$1))
+					} else
+						throw new Error('Unknown extension ' + value)
+				}
+			case 0xd5:
+				// fixext 2
+				value = src[position$1];
+				if (value == 0x72) {
+					position$1++;
+					return recordDefinition(src[position$1++] & 0x3f, src[position$1++])
+				} else
+					return readExt(2)
+			case 0xd6:
+				// fixext 4
+				return readExt(4)
+			case 0xd7:
+				// fixext 8
+				return readExt(8)
+			case 0xd8:
+				// fixext 16
+				return readExt(16)
+			case 0xd9:
+			// str 8
+				value = src[position$1++];
+				if (srcStringEnd >= position$1) {
+					return srcString.slice(position$1 - srcStringStart, (position$1 += value) - srcStringStart)
+				}
+				return readString8(value)
+			case 0xda:
+			// str 16
+				value = dataView.getUint16(position$1);
+				position$1 += 2;
+				if (srcStringEnd >= position$1) {
+					return srcString.slice(position$1 - srcStringStart, (position$1 += value) - srcStringStart)
+				}
+				return readString16(value)
+			case 0xdb:
+			// str 32
+				value = dataView.getUint32(position$1);
+				position$1 += 4;
+				if (srcStringEnd >= position$1) {
+					return srcString.slice(position$1 - srcStringStart, (position$1 += value) - srcStringStart)
+				}
+				return readString32(value)
+			case 0xdc:
+			// array 16
+				value = dataView.getUint16(position$1);
+				position$1 += 2;
+				return readArray(value)
+			case 0xdd:
+			// array 32
+				value = dataView.getUint32(position$1);
+				position$1 += 4;
+				return readArray(value)
+			case 0xde:
+			// map 16
+				value = dataView.getUint16(position$1);
+				position$1 += 2;
+				return readMap(value)
+			case 0xdf:
+			// map 32
+				value = dataView.getUint32(position$1);
+				position$1 += 4;
+				return readMap(value)
+			default: // negative int
+				if (token >= 0xe0)
+					return token - 0x100
+				if (token === undefined) {
+					let error = new Error('Unexpected end of MessagePack data');
+					error.incomplete = true;
+					throw error
+				}
+				throw new Error('Unknown MessagePack token ' + token)
+
+		}
+	}
+}
+const validName$1 = /^[a-zA-Z_$][a-zA-Z\d_$]*$/;
+function createStructureReader(structure, firstId) {
+	function readObject() {
+		// This initial function is quick to instantiate, but runs slower. After several iterations pay the cost to build the faster function
+		if (readObject.count++ > inlineObjectReadThreshold) {
+			let readObject = structure.read = (new Function('r', 'return function(){return ' + (currentUnpackr.freezeData ? 'Object.freeze' : '') +
+				'({' + structure.map(key => key === '__proto__' ? '__proto_:r()' : validName$1.test(key) ? key + ':r()' : ('[' + JSON.stringify(key) + ']:r()')).join(',') + '})}'))(read);
+			if (structure.highByte === 0)
+				structure.read = createSecondByteReader(firstId, structure.read);
+			return readObject() // second byte is already read, if there is one so immediately read object
+		}
+		let object = {};
+		for (let i = 0, l = structure.length; i < l; i++) {
+			let key = structure[i];
+			if (key === '__proto__')
+				key = '__proto_';
+			object[key] = read();
+		}
+		if (currentUnpackr.freezeData)
+			return Object.freeze(object);
+		return object
+	}
+	readObject.count = 0;
+	if (structure.highByte === 0) {
+		return createSecondByteReader(firstId, readObject)
+	}
+	return readObject
+}
+
+const createSecondByteReader = (firstId, read0) => {
+	return function() {
+		let highByte = src[position$1++];
+		if (highByte === 0)
+			return read0()
+		let id = firstId < 32 ? -(firstId + (highByte << 5)) : firstId + (highByte << 5);
+		let structure = currentStructures[id] || loadStructures()[id];
+		if (!structure) {
+			throw new Error('Record id is not defined for ' + id)
+		}
+		if (!structure.read)
+			structure.read = createStructureReader(structure, firstId);
+		return structure.read()
+	}
+};
+
+function loadStructures() {
+	let loadedStructures = saveState(() => {
+		// save the state in case getStructures modifies our buffer
+		src = null;
+		return currentUnpackr.getStructures()
+	});
+	return currentStructures = currentUnpackr._mergeStructures(loadedStructures, currentStructures)
+}
+
+var readFixedString = readStringJS;
+var readString8 = readStringJS;
+var readString16 = readStringJS;
+var readString32 = readStringJS;
+function readStringJS(length) {
+	let result;
+	if (length < 16) {
+		if (result = shortStringInJS(length))
+			return result
+	}
+	if (length > 64 && decoder$1)
+		return decoder$1.decode(src.subarray(position$1, position$1 += length))
+	const end = position$1 + length;
+	const units = [];
+	result = '';
+	while (position$1 < end) {
+		const byte1 = src[position$1++];
+		if ((byte1 & 0x80) === 0) {
+			// 1 byte
+			units.push(byte1);
+		} else if ((byte1 & 0xe0) === 0xc0) {
+			// 2 bytes
+			const byte2 = src[position$1++] & 0x3f;
+			units.push(((byte1 & 0x1f) << 6) | byte2);
+		} else if ((byte1 & 0xf0) === 0xe0) {
+			// 3 bytes
+			const byte2 = src[position$1++] & 0x3f;
+			const byte3 = src[position$1++] & 0x3f;
+			units.push(((byte1 & 0x1f) << 12) | (byte2 << 6) | byte3);
+		} else if ((byte1 & 0xf8) === 0xf0) {
+			// 4 bytes
+			const byte2 = src[position$1++] & 0x3f;
+			const byte3 = src[position$1++] & 0x3f;
+			const byte4 = src[position$1++] & 0x3f;
+			let unit = ((byte1 & 0x07) << 0x12) | (byte2 << 0x0c) | (byte3 << 0x06) | byte4;
+			if (unit > 0xffff) {
+				unit -= 0x10000;
+				units.push(((unit >>> 10) & 0x3ff) | 0xd800);
+				unit = 0xdc00 | (unit & 0x3ff);
+			}
+			units.push(unit);
+		} else {
+			units.push(byte1);
+		}
+
+		if (units.length >= 0x1000) {
+			result += fromCharCode.apply(String, units);
+			units.length = 0;
+		}
+	}
+
+	if (units.length > 0) {
+		result += fromCharCode.apply(String, units);
+	}
+
+	return result
+}
+
+function readArray(length) {
+	let array = new Array(length);
+	for (let i = 0; i < length; i++) {
+		array[i] = read();
+	}
+	if (currentUnpackr.freezeData)
+		return Object.freeze(array)
+	return array
+}
+
+function readMap(length) {
+	if (currentUnpackr.mapsAsObjects) {
+		let object = {};
+		for (let i = 0; i < length; i++) {
+			let key = readKey();
+			if (key === '__proto__')
+				key = '__proto_';
+			object[key] = read();
+		}
+		return object
+	} else {
+		let map = new Map();
+		for (let i = 0; i < length; i++) {
+			map.set(read(), read());
+		}
+		return map
+	}
+}
+
+var fromCharCode = String.fromCharCode;
+function longStringInJS(length) {
+	let start = position$1;
+	let bytes = new Array(length);
+	for (let i = 0; i < length; i++) {
+		const byte = src[position$1++];
+		if ((byte & 0x80) > 0) {
+				position$1 = start;
+				return
+			}
+			bytes[i] = byte;
+		}
+		return fromCharCode.apply(String, bytes)
+}
+function shortStringInJS(length) {
+	if (length < 4) {
+		if (length < 2) {
+			if (length === 0)
+				return ''
+			else {
+				let a = src[position$1++];
+				if ((a & 0x80) > 1) {
+					position$1 -= 1;
+					return
+				}
+				return fromCharCode(a)
+			}
+		} else {
+			let a = src[position$1++];
+			let b = src[position$1++];
+			if ((a & 0x80) > 0 || (b & 0x80) > 0) {
+				position$1 -= 2;
+				return
+			}
+			if (length < 3)
+				return fromCharCode(a, b)
+			let c = src[position$1++];
+			if ((c & 0x80) > 0) {
+				position$1 -= 3;
+				return
+			}
+			return fromCharCode(a, b, c)
+		}
+	} else {
+		let a = src[position$1++];
+		let b = src[position$1++];
+		let c = src[position$1++];
+		let d = src[position$1++];
+		if ((a & 0x80) > 0 || (b & 0x80) > 0 || (c & 0x80) > 0 || (d & 0x80) > 0) {
+			position$1 -= 4;
+			return
+		}
+		if (length < 6) {
+			if (length === 4)
+				return fromCharCode(a, b, c, d)
+			else {
+				let e = src[position$1++];
+				if ((e & 0x80) > 0) {
+					position$1 -= 5;
+					return
+				}
+				return fromCharCode(a, b, c, d, e)
+			}
+		} else if (length < 8) {
+			let e = src[position$1++];
+			let f = src[position$1++];
+			if ((e & 0x80) > 0 || (f & 0x80) > 0) {
+				position$1 -= 6;
+				return
+			}
+			if (length < 7)
+				return fromCharCode(a, b, c, d, e, f)
+			let g = src[position$1++];
+			if ((g & 0x80) > 0) {
+				position$1 -= 7;
+				return
+			}
+			return fromCharCode(a, b, c, d, e, f, g)
+		} else {
+			let e = src[position$1++];
+			let f = src[position$1++];
+			let g = src[position$1++];
+			let h = src[position$1++];
+			if ((e & 0x80) > 0 || (f & 0x80) > 0 || (g & 0x80) > 0 || (h & 0x80) > 0) {
+				position$1 -= 8;
+				return
+			}
+			if (length < 10) {
+				if (length === 8)
+					return fromCharCode(a, b, c, d, e, f, g, h)
+				else {
+					let i = src[position$1++];
+					if ((i & 0x80) > 0) {
+						position$1 -= 9;
+						return
+					}
+					return fromCharCode(a, b, c, d, e, f, g, h, i)
+				}
+			} else if (length < 12) {
+				let i = src[position$1++];
+				let j = src[position$1++];
+				if ((i & 0x80) > 0 || (j & 0x80) > 0) {
+					position$1 -= 10;
+					return
+				}
+				if (length < 11)
+					return fromCharCode(a, b, c, d, e, f, g, h, i, j)
+				let k = src[position$1++];
+				if ((k & 0x80) > 0) {
+					position$1 -= 11;
+					return
+				}
+				return fromCharCode(a, b, c, d, e, f, g, h, i, j, k)
+			} else {
+				let i = src[position$1++];
+				let j = src[position$1++];
+				let k = src[position$1++];
+				let l = src[position$1++];
+				if ((i & 0x80) > 0 || (j & 0x80) > 0 || (k & 0x80) > 0 || (l & 0x80) > 0) {
+					position$1 -= 12;
+					return
+				}
+				if (length < 14) {
+					if (length === 12)
+						return fromCharCode(a, b, c, d, e, f, g, h, i, j, k, l)
+					else {
+						let m = src[position$1++];
+						if ((m & 0x80) > 0) {
+							position$1 -= 13;
+							return
+						}
+						return fromCharCode(a, b, c, d, e, f, g, h, i, j, k, l, m)
+					}
+				} else {
+					let m = src[position$1++];
+					let n = src[position$1++];
+					if ((m & 0x80) > 0 || (n & 0x80) > 0) {
+						position$1 -= 14;
+						return
+					}
+					if (length < 15)
+						return fromCharCode(a, b, c, d, e, f, g, h, i, j, k, l, m, n)
+					let o = src[position$1++];
+					if ((o & 0x80) > 0) {
+						position$1 -= 15;
+						return
+					}
+					return fromCharCode(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o)
+				}
+			}
+		}
+	}
+}
+
+function readOnlyJSString() {
+	let token = src[position$1++];
+	let length;
+	if (token < 0xc0) {
+		// fixstr
+		length = token - 0xa0;
+	} else {
+		switch(token) {
+			case 0xd9:
+			// str 8
+				length = src[position$1++];
+				break
+			case 0xda:
+			// str 16
+				length = dataView.getUint16(position$1);
+				position$1 += 2;
+				break
+			case 0xdb:
+			// str 32
+				length = dataView.getUint32(position$1);
+				position$1 += 4;
+				break
+			default:
+				throw new Error('Expected string')
+		}
+	}
+	return readStringJS(length)
+}
+
+
+function readBin(length) {
+	return currentUnpackr.copyBuffers ?
+		// specifically use the copying slice (not the node one)
+		Uint8Array.prototype.slice.call(src, position$1, position$1 += length) :
+		src.subarray(position$1, position$1 += length)
+}
+function readExt(length) {
+	let type = src[position$1++];
+	if (currentExtensions[type]) {
+		let end;
+		return currentExtensions[type](src.subarray(position$1, end = (position$1 += length)), (readPosition) => {
+			position$1 = readPosition;
+			try {
+				return read();
+			} finally {
+				position$1 = end;
+			}
+		})
+	}
+	else
+		throw new Error('Unknown extension type ' + type)
+}
+
+var keyCache = new Array(4096);
+function readKey() {
+	let length = src[position$1++];
+	if (length >= 0xa0 && length < 0xc0) {
+		// fixstr, potentially use key cache
+		length = length - 0xa0;
+		if (srcStringEnd >= position$1) // if it has been extracted, must use it (and faster anyway)
+			return srcString.slice(position$1 - srcStringStart, (position$1 += length) - srcStringStart)
+		else if (!(srcStringEnd == 0 && srcEnd < 180))
+			return readFixedString(length)
+	} else { // not cacheable, go back and do a standard read
+		position$1--;
+		return asSafeString(read())
+	}
+	let key = ((length << 5) ^ (length > 1 ? dataView.getUint16(position$1) : length > 0 ? src[position$1] : 0)) & 0xfff;
+	let entry = keyCache[key];
+	let checkPosition = position$1;
+	let end = position$1 + length - 3;
+	let chunk;
+	let i = 0;
+	if (entry && entry.bytes == length) {
+		while (checkPosition < end) {
+			chunk = dataView.getUint32(checkPosition);
+			if (chunk != entry[i++]) {
+				checkPosition = 0x70000000;
+				break
+			}
+			checkPosition += 4;
+		}
+		end += 3;
+		while (checkPosition < end) {
+			chunk = src[checkPosition++];
+			if (chunk != entry[i++]) {
+				checkPosition = 0x70000000;
+				break
+			}
+		}
+		if (checkPosition === end) {
+			position$1 = checkPosition;
+			return entry.string
+		}
+		end -= 3;
+		checkPosition = position$1;
+	}
+	entry = [];
+	keyCache[key] = entry;
+	entry.bytes = length;
+	while (checkPosition < end) {
+		chunk = dataView.getUint32(checkPosition);
+		entry.push(chunk);
+		checkPosition += 4;
+	}
+	end += 3;
+	while (checkPosition < end) {
+		chunk = src[checkPosition++];
+		entry.push(chunk);
+	}
+	// for small blocks, avoiding the overhead of the extract call is helpful
+	let string = length < 16 ? shortStringInJS(length) : longStringInJS(length);
+	if (string != null)
+		return entry.string = string
+	return entry.string = readFixedString(length)
+}
+
+function asSafeString(property) {
+	// protect against expensive (DoS) string conversions
+	if (typeof property === 'string') return property;
+	if (typeof property === 'number' || typeof property === 'boolean' || typeof property === 'bigint') return property.toString();
+	if (property == null) return property + '';
+	throw new Error('Invalid property type for record', typeof property);
+}
+// the registration of the record definition extension (as "r")
+const recordDefinition = (id, highByte) => {
+	let structure = read().map(asSafeString); // ensure that all keys are strings and
+	// that the array is mutable
+	let firstByte = id;
+	if (highByte !== undefined) {
+		id = id < 32 ? -((highByte << 5) + id) : ((highByte << 5) + id);
+		structure.highByte = highByte;
+	}
+	let existingStructure = currentStructures[id];
+	// If it is a shared structure, we need to restore any changes after reading.
+	// Also in sequential mode, we may get incomplete reads and thus errors, and we need to restore
+	// to the state prior to an incomplete read in order to properly resume.
+	if (existingStructure && (existingStructure.isShared || sequentialMode)) {
+		(currentStructures.restoreStructures || (currentStructures.restoreStructures = []))[id] = existingStructure;
+	}
+	currentStructures[id] = structure;
+	structure.read = createStructureReader(structure, firstByte);
+	return structure.read()
+};
+currentExtensions[0] = () => {}; // notepack defines extension 0 to mean undefined, so use that as the default here
+currentExtensions[0].noBuffer = true;
+
+currentExtensions[0x42] = (data) => {
+	// decode bigint
+	let length = data.length;
+	let value = BigInt(data[0] & 0x80 ? data[0] - 0x100 : data[0]);
+	for (let i = 1; i < length; i++) {
+		value <<= BigInt(8);
+		value += BigInt(data[i]);
+	}
+	return value;
+};
+
+let errors = { Error, TypeError, ReferenceError };
+currentExtensions[0x65] = () => {
+	let data = read();
+	return (errors[data[0]] || Error)(data[1], { cause: data[2] })
+};
+
+currentExtensions[0x69] = (data) => {
+	// id extension (for structured clones)
+	if (currentUnpackr.structuredClone === false) throw new Error('Structured clone extension is disabled')
+	let id = dataView.getUint32(position$1 - 4);
+	if (!referenceMap)
+		referenceMap = new Map();
+	let token = src[position$1];
+	let target;
+	// TODO: handle Maps, Sets, and other types that can cycle; this is complicated, because you potentially need to read
+	// ahead past references to record structure definitions
+	if (token >= 0x90 && token < 0xa0 || token == 0xdc || token == 0xdd)
+		target = [];
+	else
+		target = {};
+
+	let refEntry = { target }; // a placeholder object
+	referenceMap.set(id, refEntry);
+	let targetProperties = read(); // read the next value as the target object to id
+	if (refEntry.used) // there is a cycle, so we have to assign properties to original target
+		return Object.assign(target, targetProperties)
+	refEntry.target = targetProperties; // the placeholder wasn't used, replace with the deserialized one
+	return targetProperties // no cycle, can just use the returned read object
+};
+
+currentExtensions[0x70] = (data) => {
+	// pointer extension (for structured clones)
+	if (currentUnpackr.structuredClone === false) throw new Error('Structured clone extension is disabled')
+	let id = dataView.getUint32(position$1 - 4);
+	let refEntry = referenceMap.get(id);
+	refEntry.used = true;
+	return refEntry.target
+};
+
+currentExtensions[0x73] = () => new Set(read());
+
+const typedArrays = ['Int8','Uint8','Uint8Clamped','Int16','Uint16','Int32','Uint32','Float32','Float64','BigInt64','BigUint64'].map(type => type + 'Array');
+
+let glbl = typeof globalThis === 'object' ? globalThis : window;
+currentExtensions[0x74] = (data) => {
+	let typeCode = data[0];
+	let typedArrayName = typedArrays[typeCode];
+	if (!typedArrayName) {
+		if (typeCode === 16) {
+			let ab = new ArrayBuffer(data.length - 1);
+			let u8 = new Uint8Array(ab);
+			u8.set(data.subarray(1));
+			return ab;
+		}
+		throw new Error('Could not find typed array for code ' + typeCode)
+	}
+	// we have to always slice/copy here to get a new ArrayBuffer that is word/byte aligned
+	return new glbl[typedArrayName](Uint8Array.prototype.slice.call(data, 1).buffer)
+};
+currentExtensions[0x78] = () => {
+	let data = read();
+	return new RegExp(data[0], data[1])
+};
+const TEMP_BUNDLE = [];
+currentExtensions[0x62] = (data) => {
+	let dataSize = (data[0] << 24) + (data[1] << 16) + (data[2] << 8) + data[3];
+	let dataPosition = position$1;
+	position$1 += dataSize - data.length;
+	bundledStrings$1 = TEMP_BUNDLE;
+	bundledStrings$1 = [readOnlyJSString(), readOnlyJSString()];
+	bundledStrings$1.position0 = 0;
+	bundledStrings$1.position1 = 0;
+	bundledStrings$1.postBundlePosition = position$1;
+	position$1 = dataPosition;
+	return read()
+};
+
+currentExtensions[0xff] = (data) => {
+	// 32-bit date extension
+	if (data.length == 4)
+		return new Date((data[0] * 0x1000000 + (data[1] << 16) + (data[2] << 8) + data[3]) * 1000)
+	else if (data.length == 8)
+		return new Date(
+			((data[0] << 22) + (data[1] << 14) + (data[2] << 6) + (data[3] >> 2)) / 1000000 +
+			((data[3] & 0x3) * 0x100000000 + data[4] * 0x1000000 + (data[5] << 16) + (data[6] << 8) + data[7]) * 1000)
+	else if (data.length == 12)// TODO: Implement support for negative
+		return new Date(
+			((data[0] << 24) + (data[1] << 16) + (data[2] << 8) + data[3]) / 1000000 +
+			(((data[4] & 0x80) ? -281474976710656 : 0) + data[6] * 0x10000000000 + data[7] * 0x100000000 + data[8] * 0x1000000 + (data[9] << 16) + (data[10] << 8) + data[11]) * 1000)
+	else
+		return new Date('invalid')
+}; // notepack defines extension 0 to mean undefined, so use that as the default here
+// registration of bulk record definition?
+// currentExtensions[0x52] = () =>
+
+function saveState(callback) {
+	let savedSrcEnd = srcEnd;
+	let savedPosition = position$1;
+	let savedSrcStringStart = srcStringStart;
+	let savedSrcStringEnd = srcStringEnd;
+	let savedSrcString = srcString;
+	let savedReferenceMap = referenceMap;
+	let savedBundledStrings = bundledStrings$1;
+
+	// TODO: We may need to revisit this if we do more external calls to user code (since it could be slow)
+	let savedSrc = new Uint8Array(src.slice(0, srcEnd)); // we copy the data in case it changes while external data is processed
+	let savedStructures = currentStructures;
+	let savedStructuresContents = currentStructures.slice(0, currentStructures.length);
+	let savedPackr = currentUnpackr;
+	let savedSequentialMode = sequentialMode;
+	let value = callback();
+	srcEnd = savedSrcEnd;
+	position$1 = savedPosition;
+	srcStringStart = savedSrcStringStart;
+	srcStringEnd = savedSrcStringEnd;
+	srcString = savedSrcString;
+	referenceMap = savedReferenceMap;
+	bundledStrings$1 = savedBundledStrings;
+	src = savedSrc;
+	sequentialMode = savedSequentialMode;
+	currentStructures = savedStructures;
+	currentStructures.splice(0, currentStructures.length, ...savedStructuresContents);
+	currentUnpackr = savedPackr;
+	dataView = new DataView(src.buffer, src.byteOffset, src.byteLength);
+	return value
+}
+function clearSource() {
+	src = null;
+	referenceMap = null;
+	currentStructures = null;
+}
+
+const mult10 = new Array(147); // this is a table matching binary exponents to the multiplier to determine significant digit rounding
+for (let i = 0; i < 256; i++) {
+	mult10[i] = +('1e' + Math.floor(45.15 - i * 0.30103));
+}
+var defaultUnpackr = new Unpackr({ useRecords: false });
+defaultUnpackr.unpack;
+defaultUnpackr.unpackMultiple;
+defaultUnpackr.unpack;
+let f32Array = new Float32Array(1);
+new Uint8Array(f32Array.buffer, 0, 4);
+
+let textEncoder;
+try {
+	textEncoder = new TextEncoder();
+} catch (error) {}
+let extensions, extensionClasses;
+const hasNodeBuffer = typeof Buffer !== 'undefined';
+const ByteArrayAllocate = hasNodeBuffer ?
+	function(length) { return Buffer.allocUnsafeSlow(length) } : Uint8Array;
+const ByteArray = hasNodeBuffer ? Buffer : Uint8Array;
+const MAX_BUFFER_SIZE = hasNodeBuffer ? 0x100000000 : 0x7fd00000;
+let target, keysTarget;
+let targetView;
+let position = 0;
+let safeEnd;
+let bundledStrings = null;
+let writeStructSlots;
+const MAX_BUNDLE_SIZE = 0x5500; // maximum characters such that the encoded bytes fits in 16 bits.
+const hasNonLatin = /[\u0080-\uFFFF]/;
+const RECORD_SYMBOL = Symbol('record-id');
+class Packr extends Unpackr {
+	constructor(options) {
+		super(options);
+		this.offset = 0;
+		let start;
+		let hasSharedUpdate;
+		let structures;
+		let referenceMap;
+		let encodeUtf8 = ByteArray.prototype.utf8Write ? function(string, position) {
+			return target.utf8Write(string, position, target.byteLength - position)
+		} : (textEncoder && textEncoder.encodeInto) ?
+			function(string, position) {
+				return textEncoder.encodeInto(string, target.subarray(position)).written
+			} : false;
+
+		let packr = this;
+		if (!options)
+			options = {};
+		let isSequential = options && options.sequential;
+		let hasSharedStructures = options.structures || options.saveStructures;
+		let maxSharedStructures = options.maxSharedStructures;
+		if (maxSharedStructures == null)
+			maxSharedStructures = hasSharedStructures ? 32 : 0;
+		if (maxSharedStructures > 8160)
+			throw new Error('Maximum maxSharedStructure is 8160')
+		if (options.structuredClone && options.moreTypes == undefined) {
+			this.moreTypes = true;
+		}
+		let maxOwnStructures = options.maxOwnStructures;
+		if (maxOwnStructures == null)
+			maxOwnStructures = hasSharedStructures ? 32 : 64;
+		if (!this.structures && options.useRecords != false)
+			this.structures = [];
+		// two byte record ids for shared structures
+		let useTwoByteRecords = maxSharedStructures > 32 || (maxOwnStructures + maxSharedStructures > 64);
+		let sharedLimitId = maxSharedStructures + 0x40;
+		let maxStructureId = maxSharedStructures + maxOwnStructures + 0x40;
+		if (maxStructureId > 8256) {
+			throw new Error('Maximum maxSharedStructure + maxOwnStructure is 8192')
+		}
+		let recordIdsToRemove = [];
+		let transitionsCount = 0;
+		let serializationsSinceTransitionRebuild = 0;
+
+		this.pack = this.encode = function(value, encodeOptions) {
+			if (!target) {
+				target = new ByteArrayAllocate(8192);
+				targetView = target.dataView || (target.dataView = new DataView(target.buffer, 0, 8192));
+				position = 0;
+			}
+			safeEnd = target.length - 10;
+			if (safeEnd - position < 0x800) {
+				// don't start too close to the end,
+				target = new ByteArrayAllocate(target.length);
+				targetView = target.dataView || (target.dataView = new DataView(target.buffer, 0, target.length));
+				safeEnd = target.length - 10;
+				position = 0;
+			} else
+				position = (position + 7) & 0x7ffffff8; // Word align to make any future copying of this buffer faster
+			start = position;
+			if (encodeOptions & RESERVE_START_SPACE) position += (encodeOptions & 0xff);
+			referenceMap = packr.structuredClone ? new Map() : null;
+			if (packr.bundleStrings && typeof value !== 'string') {
+				bundledStrings = [];
+				bundledStrings.size = Infinity; // force a new bundle start on first string
+			} else
+				bundledStrings = null;
+			structures = packr.structures;
+			if (structures) {
+				if (structures.uninitialized)
+					structures = packr._mergeStructures(packr.getStructures());
+				let sharedLength = structures.sharedLength || 0;
+				if (sharedLength > maxSharedStructures) {
+					//if (maxSharedStructures <= 32 && structures.sharedLength > 32) // TODO: could support this, but would need to update the limit ids
+					throw new Error('Shared structures is larger than maximum shared structures, try increasing maxSharedStructures to ' + structures.sharedLength)
+				}
+				if (!structures.transitions) {
+					// rebuild our structure transitions
+					structures.transitions = Object.create(null);
+					for (let i = 0; i < sharedLength; i++) {
+						let keys = structures[i];
+						if (!keys)
+							continue
+						let nextTransition, transition = structures.transitions;
+						for (let j = 0, l = keys.length; j < l; j++) {
+							let key = keys[j];
+							nextTransition = transition[key];
+							if (!nextTransition) {
+								nextTransition = transition[key] = Object.create(null);
+							}
+							transition = nextTransition;
+						}
+						transition[RECORD_SYMBOL] = i + 0x40;
+					}
+					this.lastNamedStructuresLength = sharedLength;
+				}
+				if (!isSequential) {
+					structures.nextId = sharedLength + 0x40;
+				}
+			}
+			if (hasSharedUpdate)
+				hasSharedUpdate = false;
+			let encodingError;
+			try {
+				if (packr.randomAccessStructure && value && value.constructor && value.constructor === Object)
+					writeStruct(value);
+				else
+					pack(value);
+				let lastBundle = bundledStrings;
+				if (bundledStrings)
+					writeBundles(start, pack, 0);
+				if (referenceMap && referenceMap.idsToInsert) {
+					let idsToInsert = referenceMap.idsToInsert.sort((a, b) => a.offset > b.offset ? 1 : -1);
+					let i = idsToInsert.length;
+					let incrementPosition = -1;
+					while (lastBundle && i > 0) {
+						let insertionPoint = idsToInsert[--i].offset + start;
+						if (insertionPoint < (lastBundle.stringsPosition + start) && incrementPosition === -1)
+							incrementPosition = 0;
+						if (insertionPoint > (lastBundle.position + start)) {
+							if (incrementPosition >= 0)
+								incrementPosition += 6;
+						} else {
+							if (incrementPosition >= 0) {
+								// update the bundle reference now
+								targetView.setUint32(lastBundle.position + start,
+									targetView.getUint32(lastBundle.position + start) + incrementPosition);
+								incrementPosition = -1; // reset
+							}
+							lastBundle = lastBundle.previous;
+							i++;
+						}
+					}
+					if (incrementPosition >= 0 && lastBundle) {
+						// update the bundle reference now
+						targetView.setUint32(lastBundle.position + start,
+							targetView.getUint32(lastBundle.position + start) + incrementPosition);
+					}
+					position += idsToInsert.length * 6;
+					if (position > safeEnd)
+						makeRoom(position);
+					packr.offset = position;
+					let serialized = insertIds(target.subarray(start, position), idsToInsert);
+					referenceMap = null;
+					return serialized
+				}
+				packr.offset = position; // update the offset so next serialization doesn't write over our buffer, but can continue writing to same buffer sequentially
+				if (encodeOptions & REUSE_BUFFER_MODE) {
+					target.start = start;
+					target.end = position;
+					return target
+				}
+				return target.subarray(start, position) // position can change if we call pack again in saveStructures, so we get the buffer now
+			} catch(error) {
+				encodingError = error;
+				throw error;
+			} finally {
+				if (structures) {
+					resetStructures();
+					if (hasSharedUpdate && packr.saveStructures) {
+						let sharedLength = structures.sharedLength || 0;
+						// we can't rely on start/end with REUSE_BUFFER_MODE since they will (probably) change when we save
+						let returnBuffer = target.subarray(start, position);
+						let newSharedData = prepareStructures(structures, packr);
+						if (!encodingError) { // TODO: If there is an encoding error, should make the structures as uninitialized so they get rebuilt next time
+							if (packr.saveStructures(newSharedData, newSharedData.isCompatible) === false) {
+								// get updated structures and try again if the update failed
+								return packr.pack(value, encodeOptions)
+							}
+							packr.lastNamedStructuresLength = sharedLength;
+							// don't keep large buffers around
+							if (target.length > 0x40000000) target = null;
+							return returnBuffer
+						}
+					}
+				}
+				// don't keep large buffers around, they take too much memory and cause problems (limit at 1GB)
+				if (target.length > 0x40000000) target = null;
+				if (encodeOptions & RESET_BUFFER_MODE)
+					position = start;
+			}
+		};
+		const resetStructures = () => {
+			if (serializationsSinceTransitionRebuild < 10)
+				serializationsSinceTransitionRebuild++;
+			let sharedLength = structures.sharedLength || 0;
+			if (structures.length > sharedLength && !isSequential)
+				structures.length = sharedLength;
+			if (transitionsCount > 10000) {
+				// force a rebuild occasionally after a lot of transitions so it can get cleaned up
+				structures.transitions = null;
+				serializationsSinceTransitionRebuild = 0;
+				transitionsCount = 0;
+				if (recordIdsToRemove.length > 0)
+					recordIdsToRemove = [];
+			} else if (recordIdsToRemove.length > 0 && !isSequential) {
+				for (let i = 0, l = recordIdsToRemove.length; i < l; i++) {
+					recordIdsToRemove[i][RECORD_SYMBOL] = 0;
+				}
+				recordIdsToRemove = [];
+			}
+		};
+		const packArray = (value) => {
+			var length = value.length;
+			if (length < 0x10) {
+				target[position++] = 0x90 | length;
+			} else if (length < 0x10000) {
+				target[position++] = 0xdc;
+				target[position++] = length >> 8;
+				target[position++] = length & 0xff;
+			} else {
+				target[position++] = 0xdd;
+				targetView.setUint32(position, length);
+				position += 4;
+			}
+			for (let i = 0; i < length; i++) {
+				pack(value[i]);
+			}
+		};
+		const pack = (value) => {
+			if (position > safeEnd)
+				target = makeRoom(position);
+
+			var type = typeof value;
+			var length;
+			if (type === 'string') {
+				let strLength = value.length;
+				if (bundledStrings && strLength >= 4 && strLength < 0x1000) {
+					if ((bundledStrings.size += strLength) > MAX_BUNDLE_SIZE) {
+						let extStart;
+						let maxBytes = (bundledStrings[0] ? bundledStrings[0].length * 3 + bundledStrings[1].length : 0) + 10;
+						if (position + maxBytes > safeEnd)
+							target = makeRoom(position + maxBytes);
+						let lastBundle;
+						if (bundledStrings.position) { // here we use the 0x62 extension to write the last bundle and reserve space for the reference pointer to the next/current bundle
+							lastBundle = bundledStrings;
+							target[position] = 0xc8; // ext 16
+							position += 3; // reserve for the writing bundle size
+							target[position++] = 0x62; // 'b'
+							extStart = position - start;
+							position += 4; // reserve for writing bundle reference
+							writeBundles(start, pack, 0); // write the last bundles
+							targetView.setUint16(extStart + start - 3, position - start - extStart);
+						} else { // here we use the 0x62 extension just to reserve the space for the reference pointer to the bundle (will be updated once the bundle is written)
+							target[position++] = 0xd6; // fixext 4
+							target[position++] = 0x62; // 'b'
+							extStart = position - start;
+							position += 4; // reserve for writing bundle reference
+						}
+						bundledStrings = ['', '']; // create new ones
+						bundledStrings.previous = lastBundle;
+						bundledStrings.size = 0;
+						bundledStrings.position = extStart;
+					}
+					let twoByte = hasNonLatin.test(value);
+					bundledStrings[twoByte ? 0 : 1] += value;
+					target[position++] = 0xc1;
+					pack(twoByte ? -strLength : strLength);
+					return
+				}
+				let headerSize;
+				// first we estimate the header size, so we can write to the correct location
+				if (strLength < 0x20) {
+					headerSize = 1;
+				} else if (strLength < 0x100) {
+					headerSize = 2;
+				} else if (strLength < 0x10000) {
+					headerSize = 3;
+				} else {
+					headerSize = 5;
+				}
+				let maxBytes = strLength * 3;
+				if (position + maxBytes > safeEnd)
+					target = makeRoom(position + maxBytes);
+
+				if (strLength < 0x40 || !encodeUtf8) {
+					let i, c1, c2, strPosition = position + headerSize;
+					for (i = 0; i < strLength; i++) {
+						c1 = value.charCodeAt(i);
+						if (c1 < 0x80) {
+							target[strPosition++] = c1;
+						} else if (c1 < 0x800) {
+							target[strPosition++] = c1 >> 6 | 0xc0;
+							target[strPosition++] = c1 & 0x3f | 0x80;
+						} else if (
+							(c1 & 0xfc00) === 0xd800 &&
+							((c2 = value.charCodeAt(i + 1)) & 0xfc00) === 0xdc00
+						) {
+							c1 = 0x10000 + ((c1 & 0x03ff) << 10) + (c2 & 0x03ff);
+							i++;
+							target[strPosition++] = c1 >> 18 | 0xf0;
+							target[strPosition++] = c1 >> 12 & 0x3f | 0x80;
+							target[strPosition++] = c1 >> 6 & 0x3f | 0x80;
+							target[strPosition++] = c1 & 0x3f | 0x80;
+						} else {
+							target[strPosition++] = c1 >> 12 | 0xe0;
+							target[strPosition++] = c1 >> 6 & 0x3f | 0x80;
+							target[strPosition++] = c1 & 0x3f | 0x80;
+						}
+					}
+					length = strPosition - position - headerSize;
+				} else {
+					length = encodeUtf8(value, position + headerSize);
+				}
+
+				if (length < 0x20) {
+					target[position++] = 0xa0 | length;
+				} else if (length < 0x100) {
+					if (headerSize < 2) {
+						target.copyWithin(position + 2, position + 1, position + 1 + length);
+					}
+					target[position++] = 0xd9;
+					target[position++] = length;
+				} else if (length < 0x10000) {
+					if (headerSize < 3) {
+						target.copyWithin(position + 3, position + 2, position + 2 + length);
+					}
+					target[position++] = 0xda;
+					target[position++] = length >> 8;
+					target[position++] = length & 0xff;
+				} else {
+					if (headerSize < 5) {
+						target.copyWithin(position + 5, position + 3, position + 3 + length);
+					}
+					target[position++] = 0xdb;
+					targetView.setUint32(position, length);
+					position += 4;
+				}
+				position += length;
+			} else if (type === 'number') {
+				if (value >>> 0 === value) {// positive integer, 32-bit or less
+					// positive uint
+					if (value < 0x20 || (value < 0x80 && this.useRecords === false) || (value < 0x40 && !this.randomAccessStructure)) {
+						target[position++] = value;
+					} else if (value < 0x100) {
+						target[position++] = 0xcc;
+						target[position++] = value;
+					} else if (value < 0x10000) {
+						target[position++] = 0xcd;
+						target[position++] = value >> 8;
+						target[position++] = value & 0xff;
+					} else {
+						target[position++] = 0xce;
+						targetView.setUint32(position, value);
+						position += 4;
+					}
+				} else if (value >> 0 === value) { // negative integer
+					if (value >= -32) {
+						target[position++] = 0x100 + value;
+					} else if (value >= -128) {
+						target[position++] = 0xd0;
+						target[position++] = value + 0x100;
+					} else if (value >= -32768) {
+						target[position++] = 0xd1;
+						targetView.setInt16(position, value);
+						position += 2;
+					} else {
+						target[position++] = 0xd2;
+						targetView.setInt32(position, value);
+						position += 4;
+					}
+				} else {
+					let useFloat32;
+					if ((useFloat32 = this.useFloat32) > 0 && value < 0x100000000 && value >= -2147483648) {
+						target[position++] = 0xca;
+						targetView.setFloat32(position, value);
+						let xShifted;
+						if (useFloat32 < 4 ||
+								// this checks for rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
+								((xShifted = value * mult10[((target[position] & 0x7f) << 1) | (target[position + 1] >> 7)]) >> 0) === xShifted) {
+							position += 4;
+							return
+						} else
+							position--; // move back into position for writing a double
+					}
+					target[position++] = 0xcb;
+					targetView.setFloat64(position, value);
+					position += 8;
+				}
+			} else if (type === 'object' || type === 'function') {
+				if (!value)
+					target[position++] = 0xc0;
+				else {
+					if (referenceMap) {
+						let referee = referenceMap.get(value);
+						if (referee) {
+							if (!referee.id) {
+								let idsToInsert = referenceMap.idsToInsert || (referenceMap.idsToInsert = []);
+								referee.id = idsToInsert.push(referee);
+							}
+							target[position++] = 0xd6; // fixext 4
+							target[position++] = 0x70; // "p" for pointer
+							targetView.setUint32(position, referee.id);
+							position += 4;
+							return
+						} else
+							referenceMap.set(value, { offset: position - start });
+					}
+					let constructor = value.constructor;
+					if (constructor === Object) {
+						writeObject(value);
+					} else if (constructor === Array) {
+						packArray(value);
+					} else if (constructor === Map) {
+						if (this.mapAsEmptyObject) target[position++] = 0x80;
+						else {
+							length = value.size;
+							if (length < 0x10) {
+								target[position++] = 0x80 | length;
+							} else if (length < 0x10000) {
+								target[position++] = 0xde;
+								target[position++] = length >> 8;
+								target[position++] = length & 0xff;
+							} else {
+								target[position++] = 0xdf;
+								targetView.setUint32(position, length);
+								position += 4;
+							}
+							for (let [key, entryValue] of value) {
+								pack(key);
+								pack(entryValue);
+							}
+						}
+					} else {
+						for (let i = 0, l = extensions.length; i < l; i++) {
+							let extensionClass = extensionClasses[i];
+							if (value instanceof extensionClass) {
+								let extension = extensions[i];
+								if (extension.write) {
+									if (extension.type) {
+										target[position++] = 0xd4; // one byte "tag" extension
+										target[position++] = extension.type;
+										target[position++] = 0;
+									}
+									let writeResult = extension.write.call(this, value);
+									if (writeResult === value) { // avoid infinite recursion
+										if (Array.isArray(value)) {
+											packArray(value);
+										} else {
+											writeObject(value);
+										}
+									} else {
+										pack(writeResult);
+									}
+									return
+								}
+								let currentTarget = target;
+								let currentTargetView = targetView;
+								let currentPosition = position;
+								target = null;
+								let result;
+								try {
+									result = extension.pack.call(this, value, (size) => {
+										// restore target and use it
+										target = currentTarget;
+										currentTarget = null;
+										position += size;
+										if (position > safeEnd)
+											makeRoom(position);
+										return {
+											target, targetView, position: position - size
+										}
+									}, pack);
+								} finally {
+									// restore current target information (unless already restored)
+									if (currentTarget) {
+										target = currentTarget;
+										targetView = currentTargetView;
+										position = currentPosition;
+										safeEnd = target.length - 10;
+									}
+								}
+								if (result) {
+									if (result.length + position > safeEnd)
+										makeRoom(result.length + position);
+									position = writeExtensionData(result, target, position, extension.type);
+								}
+								return
+							}
+						}
+						// check isArray after extensions, because extensions can extend Array
+						if (Array.isArray(value)) {
+							packArray(value);
+						} else {
+							// use this as an alternate mechanism for expressing how to serialize
+							if (value.toJSON) {
+								const json = value.toJSON();
+								// if for some reason value.toJSON returns itself it'll loop forever
+								if (json !== value)
+									return pack(json)
+							}
+
+							// if there is a writeFunction, use it, otherwise just encode as undefined
+							if (type === 'function')
+								return pack(this.writeFunction && this.writeFunction(value));
+
+							// no extension found, write as plain object
+							writeObject(value);
+						}
+					}
+				}
+			} else if (type === 'boolean') {
+				target[position++] = value ? 0xc3 : 0xc2;
+			} else if (type === 'bigint') {
+				if (value < (BigInt(1)<<BigInt(63)) && value >= -(BigInt(1)<<BigInt(63))) {
+					// use a signed int as long as it fits
+					target[position++] = 0xd3;
+					targetView.setBigInt64(position, value);
+				} else if (value < (BigInt(1)<<BigInt(64)) && value > 0) {
+					// if we can fit an unsigned int, use that
+					target[position++] = 0xcf;
+					targetView.setBigUint64(position, value);
+				} else {
+					// overflow
+					if (this.largeBigIntToFloat) {
+						target[position++] = 0xcb;
+						targetView.setFloat64(position, Number(value));
+					} else if (this.largeBigIntToString) {
+						return pack(value.toString());
+					} else if (this.useBigIntExtension && value < BigInt(2)**BigInt(1023) && value > -(BigInt(2)**BigInt(1023))) {
+						target[position++] = 0xc7;
+						position++;
+						target[position++] = 0x42; // "B" for BigInt
+						let bytes = [];
+						let alignedSign;
+						do {
+							let byte = value & BigInt(0xff);
+							alignedSign = (byte & BigInt(0x80)) === (value < BigInt(0) ? BigInt(0x80) : BigInt(0));
+							bytes.push(byte);
+							value >>= BigInt(8);
+						} while (!((value === BigInt(0) || value === BigInt(-1)) && alignedSign));
+						target[position-2] = bytes.length;
+						for (let i = bytes.length; i > 0;) {
+							target[position++] = Number(bytes[--i]);
+						}
+						return
+					} else {
+						throw new RangeError(value + ' was too large to fit in MessagePack 64-bit integer format, use' +
+							' useBigIntExtension, or set largeBigIntToFloat to convert to float-64, or set' +
+							' largeBigIntToString to convert to string')
+					}
+				}
+				position += 8;
+			} else if (type === 'undefined') {
+				if (this.encodeUndefinedAsNil)
+					target[position++] = 0xc0;
+				else {
+					target[position++] = 0xd4; // a number of implementations use fixext1 with type 0, data 0 to denote undefined, so we follow suite
+					target[position++] = 0;
+					target[position++] = 0;
+				}
+			} else {
+				throw new Error('Unknown type: ' + type)
+			}
+		};
+
+		const writePlainObject = (this.variableMapSize || this.coercibleKeyAsNumber || this.skipValues) ? (object) => {
+			// this method is slightly slower, but generates "preferred serialization" (optimally small for smaller objects)
+			let keys;
+			if (this.skipValues) {
+				keys = [];
+				for (let key in object) {
+					if ((typeof object.hasOwnProperty !== 'function' || object.hasOwnProperty(key)) &&
+						!this.skipValues.includes(object[key]))
+						keys.push(key);
+				}
+			} else {
+				keys = Object.keys(object);
+			}
+			let length = keys.length;
+			if (length < 0x10) {
+				target[position++] = 0x80 | length;
+			} else if (length < 0x10000) {
+				target[position++] = 0xde;
+				target[position++] = length >> 8;
+				target[position++] = length & 0xff;
+			} else {
+				target[position++] = 0xdf;
+				targetView.setUint32(position, length);
+				position += 4;
+			}
+			let key;
+			if (this.coercibleKeyAsNumber) {
+				for (let i = 0; i < length; i++) {
+					key = keys[i];
+					let num = Number(key);
+					pack(isNaN(num) ? key : num);
+					pack(object[key]);
+				}
+
+			} else {
+				for (let i = 0; i < length; i++) {
+					pack(key = keys[i]);
+					pack(object[key]);
+				}
+			}
+		} :
+		(object) => {
+			target[position++] = 0xde; // always using map 16, so we can preallocate and set the length afterwards
+			let objectOffset = position - start;
+			position += 2;
+			let size = 0;
+			for (let key in object) {
+				if (typeof object.hasOwnProperty !== 'function' || object.hasOwnProperty(key)) {
+					pack(key);
+					pack(object[key]);
+					size++;
+				}
+			}
+			if (size > 0xffff) {
+				throw new Error('Object is too large to serialize with fast 16-bit map size,' +
+				' use the "variableMapSize" option to serialize this object');
+			}
+			target[objectOffset++ + start] = size >> 8;
+			target[objectOffset + start] = size & 0xff;
+		};
+
+		const writeRecord = this.useRecords === false ? writePlainObject :
+		(options.progressiveRecords && !useTwoByteRecords) ?  // this is about 2% faster for highly stable structures, since it only requires one for-in loop (but much more expensive when new structure needs to be written)
+		(object) => {
+			let nextTransition, transition = structures.transitions || (structures.transitions = Object.create(null));
+			let objectOffset = position++ - start;
+			let wroteKeys;
+			for (let key in object) {
+				if (typeof object.hasOwnProperty !== 'function' || object.hasOwnProperty(key)) {
+					nextTransition = transition[key];
+					if (nextTransition)
+						transition = nextTransition;
+					else {
+						// record doesn't exist, create full new record and insert it
+						let keys = Object.keys(object);
+						let lastTransition = transition;
+						transition = structures.transitions;
+						let newTransitions = 0;
+						for (let i = 0, l = keys.length; i < l; i++) {
+							let key = keys[i];
+							nextTransition = transition[key];
+							if (!nextTransition) {
+								nextTransition = transition[key] = Object.create(null);
+								newTransitions++;
+							}
+							transition = nextTransition;
+						}
+						if (objectOffset + start + 1 == position) {
+							// first key, so we don't need to insert, we can just write record directly
+							position--;
+							newRecord(transition, keys, newTransitions);
+						} else // otherwise we need to insert the record, moving existing data after the record
+							insertNewRecord(transition, keys, objectOffset, newTransitions);
+						wroteKeys = true;
+						transition = lastTransition[key];
+					}
+					pack(object[key]);
+				}
+			}
+			if (!wroteKeys) {
+				let recordId = transition[RECORD_SYMBOL];
+				if (recordId)
+					target[objectOffset + start] = recordId;
+				else
+					insertNewRecord(transition, Object.keys(object), objectOffset, 0);
+			}
+		} :
+		(object) => {
+			let nextTransition, transition = structures.transitions || (structures.transitions = Object.create(null));
+			let newTransitions = 0;
+			for (let key in object) if (typeof object.hasOwnProperty !== 'function' || object.hasOwnProperty(key)) {
+				nextTransition = transition[key];
+				if (!nextTransition) {
+					nextTransition = transition[key] = Object.create(null);
+					newTransitions++;
+				}
+				transition = nextTransition;
+			}
+			let recordId = transition[RECORD_SYMBOL];
+			if (recordId) {
+				if (recordId >= 0x60 && useTwoByteRecords) {
+					target[position++] = ((recordId -= 0x60) & 0x1f) + 0x60;
+					target[position++] = recordId >> 5;
+				} else
+					target[position++] = recordId;
+			} else {
+				newRecord(transition, transition.__keys__ || Object.keys(object), newTransitions);
+			}
+			// now write the values
+			for (let key in object)
+				if (typeof object.hasOwnProperty !== 'function' || object.hasOwnProperty(key)) {
+					pack(object[key]);
+				}
+		};
+
+		// create reference to useRecords if useRecords is a function
+		const checkUseRecords = typeof this.useRecords == 'function' && this.useRecords;
+
+		const writeObject = checkUseRecords ? (object) => {
+			checkUseRecords(object) ? writeRecord(object) : writePlainObject(object);
+		} : writeRecord;
+
+		const makeRoom = (end) => {
+			let newSize;
+			if (end > 0x1000000) {
+				// special handling for really large buffers
+				if ((end - start) > MAX_BUFFER_SIZE)
+					throw new Error('Packed buffer would be larger than maximum buffer size')
+				newSize = Math.min(MAX_BUFFER_SIZE,
+					Math.round(Math.max((end - start) * (end > 0x4000000 ? 1.25 : 2), 0x400000) / 0x1000) * 0x1000);
+			} else // faster handling for smaller buffers
+				newSize = ((Math.max((end - start) << 2, target.length - 1) >> 12) + 1) << 12;
+			let newBuffer = new ByteArrayAllocate(newSize);
+			targetView = newBuffer.dataView || (newBuffer.dataView = new DataView(newBuffer.buffer, 0, newSize));
+			end = Math.min(end, target.length);
+			if (target.copy)
+				target.copy(newBuffer, 0, start, end);
+			else
+				newBuffer.set(target.slice(start, end));
+			position -= start;
+			start = 0;
+			safeEnd = newBuffer.length - 10;
+			return target = newBuffer
+		};
+		const newRecord = (transition, keys, newTransitions) => {
+			let recordId = structures.nextId;
+			if (!recordId)
+				recordId = 0x40;
+			if (recordId < sharedLimitId && this.shouldShareStructure && !this.shouldShareStructure(keys)) {
+				recordId = structures.nextOwnId;
+				if (!(recordId < maxStructureId))
+					recordId = sharedLimitId;
+				structures.nextOwnId = recordId + 1;
+			} else {
+				if (recordId >= maxStructureId)// cycle back around
+					recordId = sharedLimitId;
+				structures.nextId = recordId + 1;
+			}
+			let highByte = keys.highByte = recordId >= 0x60 && useTwoByteRecords ? (recordId - 0x60) >> 5 : -1;
+			transition[RECORD_SYMBOL] = recordId;
+			transition.__keys__ = keys;
+			structures[recordId - 0x40] = keys;
+
+			if (recordId < sharedLimitId) {
+				keys.isShared = true;
+				structures.sharedLength = recordId - 0x3f;
+				hasSharedUpdate = true;
+				if (highByte >= 0) {
+					target[position++] = (recordId & 0x1f) + 0x60;
+					target[position++] = highByte;
+				} else {
+					target[position++] = recordId;
+				}
+			} else {
+				if (highByte >= 0) {
+					target[position++] = 0xd5; // fixext 2
+					target[position++] = 0x72; // "r" record defintion extension type
+					target[position++] = (recordId & 0x1f) + 0x60;
+					target[position++] = highByte;
+				} else {
+					target[position++] = 0xd4; // fixext 1
+					target[position++] = 0x72; // "r" record defintion extension type
+					target[position++] = recordId;
+				}
+
+				if (newTransitions)
+					transitionsCount += serializationsSinceTransitionRebuild * newTransitions;
+				// record the removal of the id, we can maintain our shared structure
+				if (recordIdsToRemove.length >= maxOwnStructures)
+					recordIdsToRemove.shift()[RECORD_SYMBOL] = 0; // we are cycling back through, and have to remove old ones
+				recordIdsToRemove.push(transition);
+				pack(keys);
+			}
+		};
+		const insertNewRecord = (transition, keys, insertionOffset, newTransitions) => {
+			let mainTarget = target;
+			let mainPosition = position;
+			let mainSafeEnd = safeEnd;
+			let mainStart = start;
+			target = keysTarget;
+			position = 0;
+			start = 0;
+			if (!target)
+				keysTarget = target = new ByteArrayAllocate(8192);
+			safeEnd = target.length - 10;
+			newRecord(transition, keys, newTransitions);
+			keysTarget = target;
+			let keysPosition = position;
+			target = mainTarget;
+			position = mainPosition;
+			safeEnd = mainSafeEnd;
+			start = mainStart;
+			if (keysPosition > 1) {
+				let newEnd = position + keysPosition - 1;
+				if (newEnd > safeEnd)
+					makeRoom(newEnd);
+				let insertionPosition = insertionOffset + start;
+				target.copyWithin(insertionPosition + keysPosition, insertionPosition + 1, position);
+				target.set(keysTarget.slice(0, keysPosition), insertionPosition);
+				position = newEnd;
+			} else {
+				target[insertionOffset + start] = keysTarget[0];
+			}
+		};
+		const writeStruct = (object) => {
+			let newPosition = writeStructSlots(object, target, start, position, structures, makeRoom, (value, newPosition, notifySharedUpdate) => {
+				if (notifySharedUpdate)
+					return hasSharedUpdate = true;
+				position = newPosition;
+				let startTarget = target;
+				pack(value);
+				resetStructures();
+				if (startTarget !== target) {
+					return { position, targetView, target }; // indicate the buffer was re-allocated
+				}
+				return position;
+			}, this);
+			if (newPosition === 0) // bail and go to a msgpack object
+				return writeObject(object);
+			position = newPosition;
+		};
+	}
+	useBuffer(buffer) {
+		// this means we are finished using our own buffer and we can write over it safely
+		target = buffer;
+		target.dataView || (target.dataView = new DataView(target.buffer, target.byteOffset, target.byteLength));
+		position = 0;
+	}
+	set position (value) {
+		position = value;
+	}
+	get position() {
+		return position;
+	}
+	clearSharedData() {
+		if (this.structures)
+			this.structures = [];
+		if (this.typedStructs)
+			this.typedStructs = [];
+	}
+}
+
+extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/, C1Type ];
+extensions = [{
+	pack(date, allocateForWrite, pack) {
+		let seconds = date.getTime() / 1000;
+		if ((this.useTimestamp32 || date.getMilliseconds() === 0) && seconds >= 0 && seconds < 0x100000000) {
+			// Timestamp 32
+			let { target, targetView, position} = allocateForWrite(6);
+			target[position++] = 0xd6;
+			target[position++] = 0xff;
+			targetView.setUint32(position, seconds);
+		} else if (seconds > 0 && seconds < 0x100000000) {
+			// Timestamp 64
+			let { target, targetView, position} = allocateForWrite(10);
+			target[position++] = 0xd7;
+			target[position++] = 0xff;
+			targetView.setUint32(position, date.getMilliseconds() * 4000000 + ((seconds / 1000 / 0x100000000) >> 0));
+			targetView.setUint32(position + 4, seconds);
+		} else if (isNaN(seconds)) {
+			if (this.onInvalidDate) {
+				allocateForWrite(0);
+				return pack(this.onInvalidDate())
+			}
+			// Intentionally invalid timestamp
+			let { target, targetView, position} = allocateForWrite(3);
+			target[position++] = 0xd4;
+			target[position++] = 0xff;
+			target[position++] = 0xff;
+		} else {
+			// Timestamp 96
+			let { target, targetView, position} = allocateForWrite(15);
+			target[position++] = 0xc7;
+			target[position++] = 12;
+			target[position++] = 0xff;
+			targetView.setUint32(position, date.getMilliseconds() * 1000000);
+			targetView.setBigInt64(position + 4, BigInt(Math.floor(seconds)));
+		}
+	}
+}, {
+	pack(set, allocateForWrite, pack) {
+		if (this.setAsEmptyObject) {
+			allocateForWrite(0);
+			return pack({})
+		}
+		let array = Array.from(set);
+		let { target, position} = allocateForWrite(this.moreTypes ? 3 : 0);
+		if (this.moreTypes) {
+			target[position++] = 0xd4;
+			target[position++] = 0x73; // 's' for Set
+			target[position++] = 0;
+		}
+		pack(array);
+	}
+}, {
+	pack(error, allocateForWrite, pack) {
+		let { target, position} = allocateForWrite(this.moreTypes ? 3 : 0);
+		if (this.moreTypes) {
+			target[position++] = 0xd4;
+			target[position++] = 0x65; // 'e' for error
+			target[position++] = 0;
+		}
+		pack([ error.name, error.message, error.cause ]);
+	}
+}, {
+	pack(regex, allocateForWrite, pack) {
+		let { target, position} = allocateForWrite(this.moreTypes ? 3 : 0);
+		if (this.moreTypes) {
+			target[position++] = 0xd4;
+			target[position++] = 0x78; // 'x' for regeXp
+			target[position++] = 0;
+		}
+		pack([ regex.source, regex.flags ]);
+	}
+}, {
+	pack(arrayBuffer, allocateForWrite) {
+		if (this.moreTypes)
+			writeExtBuffer(arrayBuffer, 0x10, allocateForWrite);
+		else
+			writeBuffer(hasNodeBuffer ? Buffer.from(arrayBuffer) : new Uint8Array(arrayBuffer), allocateForWrite);
+	}
+}, {
+	pack(typedArray, allocateForWrite) {
+		let constructor = typedArray.constructor;
+		if (constructor !== ByteArray && this.moreTypes)
+			writeExtBuffer(typedArray, typedArrays.indexOf(constructor.name), allocateForWrite);
+		else
+			writeBuffer(typedArray, allocateForWrite);
+	}
+}, {
+	pack(c1, allocateForWrite) { // specific 0xC1 object
+		let { target, position} = allocateForWrite(1);
+		target[position] = 0xc1;
+	}
+}];
+
+function writeExtBuffer(typedArray, type, allocateForWrite, encode) {
+	let length = typedArray.byteLength;
+	if (length + 1 < 0x100) {
+		var { target, position } = allocateForWrite(4 + length);
+		target[position++] = 0xc7;
+		target[position++] = length + 1;
+	} else if (length + 1 < 0x10000) {
+		var { target, position } = allocateForWrite(5 + length);
+		target[position++] = 0xc8;
+		target[position++] = (length + 1) >> 8;
+		target[position++] = (length + 1) & 0xff;
+	} else {
+		var { target, position, targetView } = allocateForWrite(7 + length);
+		target[position++] = 0xc9;
+		targetView.setUint32(position, length + 1); // plus one for the type byte
+		position += 4;
+	}
+	target[position++] = 0x74; // "t" for typed array
+	target[position++] = type;
+	if (!typedArray.buffer) typedArray = new Uint8Array(typedArray);
+	target.set(new Uint8Array(typedArray.buffer, typedArray.byteOffset, typedArray.byteLength), position);
+}
+function writeBuffer(buffer, allocateForWrite) {
+	let length = buffer.byteLength;
+	var target, position;
+	if (length < 0x100) {
+		var { target, position } = allocateForWrite(length + 2);
+		target[position++] = 0xc4;
+		target[position++] = length;
+	} else if (length < 0x10000) {
+		var { target, position } = allocateForWrite(length + 3);
+		target[position++] = 0xc5;
+		target[position++] = length >> 8;
+		target[position++] = length & 0xff;
+	} else {
+		var { target, position, targetView } = allocateForWrite(length + 5);
+		target[position++] = 0xc6;
+		targetView.setUint32(position, length);
+		position += 4;
+	}
+	target.set(buffer, position);
+}
+
+function writeExtensionData(result, target, position, type) {
+	let length = result.length;
+	switch (length) {
+		case 1:
+			target[position++] = 0xd4;
+			break
+		case 2:
+			target[position++] = 0xd5;
+			break
+		case 4:
+			target[position++] = 0xd6;
+			break
+		case 8:
+			target[position++] = 0xd7;
+			break
+		case 16:
+			target[position++] = 0xd8;
+			break
+		default:
+			if (length < 0x100) {
+				target[position++] = 0xc7;
+				target[position++] = length;
+			} else if (length < 0x10000) {
+				target[position++] = 0xc8;
+				target[position++] = length >> 8;
+				target[position++] = length & 0xff;
+			} else {
+				target[position++] = 0xc9;
+				target[position++] = length >> 24;
+				target[position++] = (length >> 16) & 0xff;
+				target[position++] = (length >> 8) & 0xff;
+				target[position++] = length & 0xff;
+			}
+	}
+	target[position++] = type;
+	target.set(result, position);
+	position += length;
+	return position
+}
+
+function insertIds(serialized, idsToInsert) {
+	// insert the ids that need to be referenced for structured clones
+	let nextId;
+	let distanceToMove = idsToInsert.length * 6;
+	let lastEnd = serialized.length - distanceToMove;
+	while (nextId = idsToInsert.pop()) {
+		let offset = nextId.offset;
+		let id = nextId.id;
+		serialized.copyWithin(offset + distanceToMove, offset, lastEnd);
+		distanceToMove -= 6;
+		let position = offset + distanceToMove;
+		serialized[position++] = 0xd6;
+		serialized[position++] = 0x69; // 'i'
+		serialized[position++] = id >> 24;
+		serialized[position++] = (id >> 16) & 0xff;
+		serialized[position++] = (id >> 8) & 0xff;
+		serialized[position++] = id & 0xff;
+		lastEnd = offset;
+	}
+	return serialized
+}
+
+function writeBundles(start, pack, incrementPosition) {
+	if (bundledStrings.length > 0) {
+		targetView.setUint32(bundledStrings.position + start, position + incrementPosition - bundledStrings.position - start);
+		bundledStrings.stringsPosition = position - start;
+		let writeStrings = bundledStrings;
+		bundledStrings = null;
+		pack(writeStrings[0]);
+		pack(writeStrings[1]);
+	}
+}
+function prepareStructures(structures, packr) {
+	structures.isCompatible = (existingStructures) => {
+		let compatible = !existingStructures || ((packr.lastNamedStructuresLength || 0) === existingStructures.length);
+		if (!compatible) // we want to merge these existing structures immediately since we already have it and we are in the right transaction
+			packr._mergeStructures(existingStructures);
+		return compatible;
+	};
+	return structures
+}
+
+let defaultPackr = new Packr({ useRecords: false });
+defaultPackr.pack;
+defaultPackr.pack;
+const REUSE_BUFFER_MODE = 512;
+const RESET_BUFFER_MODE = 1024;
+const RESERVE_START_SPACE = 2048;
+
+const msgPackToObject = (bytes) => {
+    const packr = new Packr({ structuredClone: true });
+    return packr.unpack(new Uint8Array(bytes));
+};
+
+function toBase64(bytes) {
+    if (isImmediateByteLike(bytes)) {
+        return immediateToBase64(bytes);
+    }
+    return eventualToBase64(bytes);
+}
+async function eventualToBase64(bytes) {
+    const ab = await toArrayBuffer(bytes);
+    return arrayBufferToBase64(ab);
+}
+function immediateToBase64(bytes) {
+    const ab = immediateToArrayBuffer(bytes);
+    return arrayBufferToBase64(ab);
+}
+
+const toBlob = (bytes, mediaType = "application/octet-stream") => {
+    if (bytes instanceof Blob) {
+        return bytes;
+    }
+    if (bytes instanceof ArrayBuffer) {
+        return new Blob([bytes], { type: mediaType });
+    }
+    if (typeof bytes === "string") {
+        return new Blob([bytes], { type: mediaType });
+    }
+    if (ArrayBuffer.isView(bytes)) {
+        return new Blob([bytes], { type: mediaType });
+    }
+    if (Array.isArray(bytes)) {
+        return new Blob([arrayToFloat64Array(bytes)], { type: mediaType });
+    }
+    return new Blob([]);
+};
+
+const toDataUrl = async (bytes) => {
+    const blob = toBlob(bytes);
+    const reader = new FileReader();
+    return new Promise((resolve, reject) => {
+        const callback = (result) => {
+            if (typeof result === "string") {
+                return resolve(result);
+            }
+            console.log({ bytes });
+            return reject("Unable to convert to data URL");
+        };
+        reader.onload = function (e) {
+            callback(e.target?.result);
+        };
+        reader.readAsDataURL(blob);
+    });
+};
+
+const toMsgPack = (obj) => {
+    const packr = new Packr({ structuredClone: true });
+    return new Uint8Array(packr.encode(obj));
+};
+
+const typeOfBytes = (bytes) => {
+    if (bytes instanceof Blob) {
+        return "Blob";
+    }
+    if (bytes instanceof ArrayBuffer) {
+        return "ArrayBuffer";
+    }
+    if (typeof bytes === "string") {
+        return "string";
+    }
+    if (ArrayBuffer.isView(bytes)) {
+        return "ArrayBufferView";
+    }
+    if (Array.isArray(bytes)) {
+        return "Array";
+    }
+};
+
+const utf8ToUint8Array = (input) => new TextEncoder().encode(input);
+
+const Bytes = {
+    toMsgPack,
+    msgPackToObject,
+    typeOfBytes,
+    toDataUrl,
+    dataUrlToBlob,
+    lengthOf,
+    isByteLike,
+    isImmediateByteLike,
+    hashOf,
+    immediateHashOf,
+    addressStringOf,
+    toArrayBuffer,
+    immediateToArrayBuffer,
+    toBlob,
+    toText,
+    toBase64,
+    encodeAsString,
+    test,
+    assignMediaTypeToBlob,
+    utf8ToUint8Array,
+    base64ToArrayBuffer,
+    arrayBufferToHex,
+    arrayBufferToUtf8,
+    arrayBufferToBase64,
+    ALL_ALGORITHMS,
+    ALGORITHM_BYTE_LENGTHS,
+};
+
 const isProducer = (valueProducer) => {
     return typeof valueProducer === "function";
-};
-
-const chain$1 = (initial, mappers) => {
-    return mappers.reduce((acc, mapper) => {
-        return mapper(acc);
-    }, initial);
-};
-
-const entries$1 = (obj) => {
-    return Object.entries(obj);
-};
-
-const filter$1 = (obj, predicate) => {
-    return Object.entries(obj).filter((entry) => {
-        const [k, v] = entry;
-        return predicate(k, v);
-    });
 };
 
 const isUndefined$1 = (obj) => {
     return obj === undefined || obj === null || Number.isNaN(obj);
 };
 
-const isIterator$1 = (maybe) => {
-    const straw = maybe;
-    return typeof straw === "object" && typeof straw["next"] === "function";
-};
-
-const first$1 = (obj, typeGuard = (v) => true) => {
-    if (isUndefined$1(obj)) {
-        return undefined;
-    }
-    if (Array.isArray(obj)) {
-        return obj.find(typeGuard);
-    }
-    if (isIterator$1(obj) && typeGuard(obj)) {
-        return obj.next().value;
-    }
-    return obj;
-};
-
-const fix = (v) => {
-    if (isUndefined$1(v)) {
-        return undefined;
-    }
-    return Object.freeze(v);
-};
-
-const forEach$1 = (obj, consumer, errorHandler = (error, key, value) => {
-    console.error("error", error);
-    console.error("object", obj);
-    console.error("key", key);
-    console.error("value", value);
-    console.error("consumer", [consumer]);
-    throw new Error("Error while iterating over object");
-}) => {
-    for (const key in obj) {
-        const value = obj[key];
-        try {
-            // @ts-ignore
-            consumer(key, obj[key]);
-        }
-        catch (error) {
-            // @ts-ignore
-            errorHandler(error, key, value);
-        }
-    }
-};
-
-const freeze = (v) => {
-    if (isUndefined$1(v)) {
-        return undefined;
-    }
-    return Object.freeze(v);
-};
-
-const fromEntries$1 = (entries) => {
-    return Object.fromEntries(entries);
-};
-
 const isDefined$1 = (obj) => {
     return !isUndefined$1(obj);
 };
 
-const fromEntriesToMultimap = (entries) => {
-    const keys = Array.from(new Set(entries.map((e) => e[0])));
-    const result = fromEntries$1(keys.map((k) => [k, []]));
-    entries.forEach((entry) => {
-        const [key, value] = entry;
-        if (isDefined$1(value)) {
-            const valueContainer = result[key];
-            valueContainer.push(value);
-        }
-    });
-    return result;
-};
-
-const get = (obj, key, defaultValue = undefined) => {
-    const value = obj[key];
-    if (isUndefined(value)) {
-        return defaultValue;
-    }
-    return value;
-};
-
-function isIterable$1(maybe) {
+function isIterable(maybe) {
     const straw = maybe;
     return (typeof straw === "object" && typeof straw[Symbol.iterator] === "function");
 }
@@ -114,129 +2659,11 @@ const toMany$1 = (obj) => {
     if (isUndefined$1(obj)) {
         return [];
     }
-    if (isIterable$1(obj)) {
+    if (isIterable(obj)) {
         return Array.from(obj);
     }
     return Array.isArray(obj) ? obj : [obj];
 };
-
-const hasKey = (obj, key) => {
-    const keys = toMany$1(key);
-    return keys.filter((key) => isDefined$1(obj[key])).length === keys.length;
-};
-
-const headOf$1 = first$1;
-
-const iff$1 = (value, mapper) => {
-    if (isDefined$1(value)) {
-        return mapper(value);
-    }
-    return undefined;
-};
-
-const isBrowser$1 = () => {
-    return typeof window !== "undefined";
-};
-
-const iffBrowser$1 = (producer) => {
-    return isBrowser$1() ? producer() : undefined;
-};
-
-const iffTyped$1 = (typeGuard, value, mapper) => {
-    if (typeGuard(value)) {
-        return iff$1(value, mapper);
-    }
-    return undefined;
-};
-
-const includesUndefined = (...arr) => {
-    if (isUndefined$1(arr)) {
-        return true;
-    }
-    arr.findIndex((x) => isUndefined$1(x)) === -1;
-};
-
-const isEmpty$1 = (value) => {
-    if (isUndefined$1(value)) {
-        return true;
-    }
-    if (typeof value === "string") {
-        return value.trim().length === 0;
-    }
-    return false;
-};
-
-const isNotEmpty$1 = (value) => {
-    return !isEmpty$1(value);
-};
-
-const keys = (obj) => {
-    return Object.keys(obj);
-};
-
-const last$1 = (obj) => {
-    if (isUndefined$1(obj)) {
-        return undefined;
-    }
-    return obj[obj.length - 1];
-};
-
-const mapValue$1 = (value, mapper) => {
-    return mapper(value);
-};
-
-const mapOf = (obj, mapper) => {
-    return entries$1(obj).map((entry) => {
-        const [key, value] = entry;
-        return mapper(key, value);
-    });
-};
-
-const omit$1 = (object, key) => {
-    const { [key]: deletedKey, ...rest } = object;
-    return rest;
-};
-const omitUnsafe$1 = (object, key) => {
-    // @ts-ignore
-    object[key] = undefined;
-    return object;
-};
-
-const orElse$1 = (o, e) => {
-    if (isDefined$1(o)) {
-        return o;
-    }
-    return e;
-};
-
-const orError$1 = (f, options = {}) => {
-    try {
-        return f();
-    }
-    catch (error) {
-        const { message, cause } = options;
-        const proximateCause = new Error(message, { cause });
-        if (error instanceof Error) {
-            error["cause"] = proximateCause;
-            return error;
-        }
-        throw new Error(message, { cause: [error, cause] });
-    }
-};
-
-const removeUndefinedValues$1 = (obj) => {
-    const cleaned = Object.entries(obj).filter(([k, v]) => isDefined$1(v));
-    return Object.fromEntries(cleaned);
-};
-
-const tailOf$1 = (obj) => {
-    if (isUndefined$1(obj)) {
-        return undefined;
-    }
-    return obj.slice(1);
-};
-
-const restOf$1 = tailOf$1;
 
 const valueOf = (valueProducer) => {
     if (isProducer(valueProducer)) {
@@ -261,454 +2688,54 @@ const safe$1 = (producer, options = {}) => {
     }
 };
 
-const safeAsync$1 = async (producer, options = {}) => {
-    const { quiet = false, def = undefined, onError } = options;
-    return safe$1(async () => {
-        const result = producer();
-        if (result instanceof Promise) {
-            return await result.catch((reason) => {
-                if (!quiet) {
-                    console.error(reason);
-                    if (isDefined$1(onError)) {
-                        console.log(valueOf(onError));
-                    }
-                }
-                return def;
-            });
-        }
-        return result;
-    });
-};
-
-const set = (obj, key, value) => {
-    return { ...obj, ...Object.fromEntries([[key, value]]) };
-};
-const setUnsafe = (obj, key, value) => {
-    obj[key] = value;
-    return obj;
-};
-
-function times$1(count, mapper) {
-    const result = [];
-    let stopped = false;
-    for (let i = 0; i < count; i++) {
-        if (stopped) {
-            break;
-        }
-        const r = mapper(i, () => {
-            stopped = true;
-        });
-        if (isDefined(r)) {
-            result.push(r);
-        }
-    }
-    return result;
-}
-
-function* timesGen$1(count, mapper) {
-    let stopped = false;
-    for (let i = 0; i < count; i++) {
-        if (stopped) {
-            return;
-        }
-        yield mapper(i, () => {
-            stopped = true;
-        });
-    }
-}
-
-const toBoolean = (value) => {
-    if (isUndefined$1(value)) {
-        return false;
-    }
-    const truthyValues = ["true", "1", "yes", "on"];
-    const falsyValues = ["false", "0", "no", "off"];
-    if (truthyValues.includes(value.toLowerCase()))
-        return true;
-    if (falsyValues.includes(value.toLowerCase()))
-        return false;
-    return false; // Return false by default
-};
-
-const toMultiMap$1 = (maps, options = {}) => {
-    const { compact = false } = options;
-    return maps.reduce((acc, cur) => {
-        Objects.entries(cur).forEach((entry) => {
-            const [k, v] = entry;
-            const values = acc[k] ?? [];
-            acc[k] = compact && values.includes(v) ? values : [...values, v];
-        });
-        return acc;
-    }, {});
-};
-
-const toNumber = (value) => {
-    if (isUndefined$1(value)) {
-        return undefined;
-    }
-    return Number(value);
-};
-
-const toPromise$1 = (producer) => {
-    const callback = () => { };
-    return new Promise((resolve, reject) => {
-        try {
-            resolve(producer(callback));
-        }
-        catch (error) {
-            reject(error);
-        }
-    });
-};
-
-const isErrorType$1 = (value) => {
-    return value instanceof Error;
-};
-
-const tryValue$1 = (value, message) => {
-    if (isErrorType$1(value)) {
-        throw new Error(message, { cause: value });
-    }
-    return value;
-};
-
-const tuple0 = () => {
-    return [];
-};
-const tuple1 = (a) => {
-    return [a];
-};
-const tuple2 = (a, b) => {
-    return [a, b];
-};
-const tuple3 = (a, b, c) => {
-    return [a, b, c];
-};
-const tuple4 = (a, b, c, d) => {
-    return [a, b, c, d];
-};
-const tuple5 = (a, b, c, d, e) => {
-    return [a, b, c, d, e];
-};
-
-const isArrayLike$1 = (maybe) => {
-    const straw = maybe;
-    return typeof straw === "object" && typeof straw.length === "number";
-};
-
-const isErrorLike$1 = (maybe) => {
-    const straw = maybe;
-    return (typeof straw === "object" &&
-        (typeof straw.message === "string" ||
-            typeof straw.stack === "string" ||
-            isDefined$1(straw.cause)));
-};
-
-const isFunction$1 = (maybe) => {
-    const straw = maybe;
-    return typeof straw === "function";
-};
-
-const update = (obj, key, mapper) => {
-    const value = get(obj, key);
-    if (isUndefined(value)) {
-        return obj;
-    }
-    const updatedValue = mapper(value);
-    return set(obj, key, updatedValue);
-};
-const updateUnsafe = (obj, key, mapper) => {
-    const value = get(obj, key);
-    if (isUndefined(value)) {
-        return obj;
-    }
-    const updatedValue = mapper(value);
-    return setUnsafe(obj, key, updatedValue);
-};
-
-const values = (obj) => {
-    return Object.values(obj);
-};
-
-const waitTimeout = (ms) => {
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            resolve(undefined);
-        }, ms);
-    });
-};
-
-const createSettler$1 = ({ settleAction, settledAfterMs, }) => {
-    let lastValue = undefined;
-    let lastModification = Date.now();
-    let settling = false;
-    const attemptToSettle = () => {
-        if (Date.now() > lastModification + settledAfterMs) {
-            if (isDefined$1(lastValue)) {
-                settleAction(lastValue);
-            }
-            settling = false;
-            return;
-        }
-        settling = true;
-        setTimeout(attemptToSettle, settledAfterMs);
-    };
-    return {
-        update: (value) => {
-            lastValue = value;
-            lastModification = Date.now();
-            if (!settling) {
-                attemptToSettle();
-            }
-        },
-    };
-};
-
-function parseIncompleteJson(input) {
-    let index = 0;
-    const length = input.length;
-    function skipWhitespace() {
-        while (index < length && /\s/.test(input[index])) {
-            index++;
-        }
-    }
-    function parseValue() {
-        skipWhitespace();
-        if (index >= length)
-            return undefined;
-        const char = input[index];
-        if (char === "{") {
-            return parseObject();
-        }
-        else if (char === "[") {
-            return parseArray();
-        }
-        else if (char === '"') {
-            return parseString();
-        }
-        else if (char === "-" || (char >= "0" && char <= "9")) {
-            return parseNumber();
-        }
-        else if (input.startsWith("true", index)) {
-            index += 4;
-            return true;
-        }
-        else if (input.startsWith("false", index)) {
-            index += 5;
-            return false;
-        }
-        else if (input.startsWith("null", index)) {
-            index += 4;
-            return null;
-        }
-        return undefined;
-    }
-    function parseObject() {
-        const result = {};
-        index++; // Skip '{'
-        while (index < length) {
-            skipWhitespace();
-            if (input[index] === "}") {
-                index++; // Skip '}'
-                return result;
-            }
-            const key = parseString();
-            if (key === undefined || typeof key !== "string") {
-                break;
-            }
-            skipWhitespace();
-            if (input[index] !== ":") {
-                break;
-            }
-            index++; // Skip ':'
-            const value = parseValue();
-            if (value === undefined) {
-                break;
-            }
-            result[key] = value;
-            skipWhitespace();
-            if (input[index] === "}") {
-                index++; // Skip '}'
-                return result;
-            }
-            else if (input[index] !== ",") {
-                break;
-            }
-            index++; // Skip ','
-        }
-        // If we reach here, the JSON object is incomplete
-        return result;
-    }
-    function parseArray() {
-        const result = [];
-        index++; // Skip '['
-        while (index < length) {
-            skipWhitespace();
-            if (input[index] === "]") {
-                index++; // Skip ']'
-                return result;
-            }
-            const value = parseValue();
-            if (value !== undefined) {
-                result.push(value);
-            }
-            skipWhitespace();
-            if (input[index] === "]") {
-                index++; // Skip ']'
-                return result;
-            }
-            else if (input[index] !== ",") {
-                break;
-            }
-            index++; // Skip ','
-        }
-        // If we reach here, the JSON array is incomplete
-        return result;
-    }
-    function parseString() {
-        let result = "";
-        index++; // Skip opening '"'
-        while (index < length) {
-            const char = input[index++];
-            if (char === '"') {
-                return result;
-            }
-            if (char === "\\") {
-                if (index < length) {
-                    const escapeChar = input[index++];
-                    if (escapeChar === '"') {
-                        result += '"';
-                    }
-                    else if (escapeChar === "\\") {
-                        result += "\\";
-                    }
-                    else if (escapeChar === "/") {
-                        result += "/";
-                    }
-                    else if (escapeChar === "b") {
-                        result += "\b";
-                    }
-                    else if (escapeChar === "f") {
-                        result += "\f";
-                    }
-                    else if (escapeChar === "n") {
-                        result += "\n";
-                    }
-                    else if (escapeChar === "r") {
-                        result += "\r";
-                    }
-                    else if (escapeChar === "t") {
-                        result += "\t";
-                    }
-                }
-            }
-            else {
-                result += char;
-            }
-        }
-        return undefined; // Incomplete string
-    }
-    function parseNumber() {
-        const start = index;
-        if (input[index] === "-") {
-            index++;
-        }
-        while (index < length && input[index] >= "0" && input[index] <= "9") {
-            index++;
-        }
-        if (input[index] === ".") {
-            index++;
-            while (index < length && input[index] >= "0" && input[index] <= "9") {
-                index++;
-            }
-        }
-        if (input[index] === "e" || input[index] === "E") {
-            index++;
-            if (input[index] === "-" || input[index] === "+") {
-                index++;
-            }
-            while (index < length && input[index] >= "0" && input[index] <= "9") {
-                index++;
-            }
-        }
-        const numberStr = input.slice(start, index);
-        const num = Number(numberStr);
-        if (isNaN(num)) {
-            return undefined; // Invalid number
-        }
-        return num;
-    }
-    return parseValue();
-}
-
 const Objects = {
-    isErrorLike: isErrorLike$1,
-    orError: orError$1,
-    tryValue: tryValue$1,
-    isErrorType: isErrorType$1,
-    isEmpty: isEmpty$1,
-    isNotEmpty: isNotEmpty$1,
-    isIterator: isIterator$1,
-    isArrayLike: isArrayLike$1,
-    times: times$1,
-    first: first$1,
-    last: last$1,
-    fix,
-    iff: iff$1,
-    iffTyped: iffTyped$1,
-    includesUndefined,
     isDefined: isDefined$1,
     isUndefined: isUndefined$1,
-    omit: omit$1,
-    omitUnsafe: omitUnsafe$1,
-    orElse: orElse$1,
-    removeUndefinedValues: removeUndefinedValues$1,
     toMany: toMany$1,
-    set,
-    setUnsafe,
-    get,
-    update,
-    updateUnsafe,
-    entries: entries$1,
-    keys,
-    values,
-    forEach: forEach$1,
-    filter: filter$1,
-    chain: chain$1,
-    fromEntries: fromEntries$1,
-    fromEntriesToMultimap,
-    freeze,
-    hasKey,
-    tuple0,
-    tuple1,
-    tuple2,
-    tuple3,
-    tuple4,
-    tuple5,
-    safe: safe$1,
-    safeAsync: safeAsync$1,
-    valueOf,
-    mapValue: mapValue$1,
-    headOf: headOf$1,
-    tailOf: tailOf$1,
-    restOf: restOf$1,
-    toMultiMap: toMultiMap$1,
-    timesGen: timesGen$1,
-    isIterable: isIterable$1,
-    isBrowser: isBrowser$1,
-    iffBrowser: iffBrowser$1,
-    mapOf,
-    toPromise: toPromise$1,
-    all: Promise.all,
-    isFunction: isFunction$1,
-    toNumber,
-    toBoolean,
-    waitTimeout,
-    createSettler: createSettler$1,
-    parseIncompleteJson,
-};
+    safe: safe$1};
 
-const { isErrorLike, chain, entries, filter, first, last, forEach, iff, orElse, removeUndefinedValues, iffTyped, isDefined, isUndefined, omit, omitUnsafe, toMany, fromEntries, safe, safeAsync, mapValue, headOf, tailOf, restOf, times, isIterator, toMultiMap, timesGen, isIterable, isArrayLike, iffBrowser, isBrowser, toPromise, all, isFunction, isEmpty, isNotEmpty, tryValue, orError, isErrorType, createSettler, } = Objects;
+const { isDefined, isUndefined, toMany, safe} = Objects;
+
+const connectEventListenerToSubjectRoot = async ({ connection, subjectRoot, listener, options = {}, env = {}, signal, onError = (e) => {
+    options?.log?.(e);
+}, }) => {
+    const { log = () => { }, queue, maxMessages, timeout } = options;
+    log("connectEventListenerToSubject: subjectRoot: ", subjectRoot);
+    const subscription = connection.subscribe(`${subjectRoot}.>`, {
+        queue,
+        max: maxMessages,
+        timeout,
+    });
+    if (isDefined(signal)) {
+        if (signal.aborted) {
+            subscription.unsubscribe();
+            throw new Error("Signal already in aborted state");
+        }
+        signal.addEventListener("abort", () => {
+            subscription.unsubscribe();
+        });
+    }
+    for await (const message of subscription) {
+        try {
+            const valueOrError = Bytes.msgPackToObject(message.data);
+            const unsubscribe = (maxMessages) => subscription.unsubscribe(maxMessages);
+            if (isDefined(valueOrError.error)) {
+                onError(valueOrError.error);
+                continue;
+            }
+            await listener({
+                detail: valueOrError.value,
+                env,
+                signal,
+                unsubscribe,
+                subject: message.subject,
+            });
+        }
+        catch (error) {
+            onError(error);
+        }
+    }
+};
 
 // deno-fmt-ignore-file
 // deno-lint-ignore-file
@@ -1493,12 +3520,12 @@ function validateName(context, name = "") {
     if (name === "") {
         throw Error(`${context} name required`);
     }
-    const m = validName$1(name);
+    const m = validName(name);
     if (m.length) {
         throw new Error(`invalid ${context} name - ${context} name ${m}`);
     }
 }
-function validName$1(name = "") {
+function validName(name = "") {
     if (name === "") {
         throw Error(`name required`);
     }
@@ -2358,8 +4385,8 @@ for(let i = 0, l = code.length; i < l; ++i){
     lookup[i] = code[i];
     revLookup[code.charCodeAt(i)] = i;
 }
-const { byteLength, toUint8Array, fromUint8Array } = init(lookup, revLookup, true);
-const decoder$1 = new TextDecoder();
+const { toUint8Array, fromUint8Array } = init(lookup, revLookup, true);
+const decoder = new TextDecoder();
 const encoder = new TextEncoder();
 function toHexString(buf) {
     return buf.reduce((hex, __byte)=>`${hex}${__byte < 16 ? "0" : ""}${__byte.toString(16)}`, "");
@@ -2379,7 +4406,7 @@ function fromHexString(hex) {
 }
 function decode1(buf, encoding = "utf8") {
     if (/^utf-?8$/i.test(encoding)) {
-        return decoder$1.decode(buf);
+        return decoder.decode(buf);
     } else if (/^base64$/i.test(encoding)) {
         return fromUint8Array(buf);
     } else if (/^hex(?:adecimal)?$/i.test(encoding)) {
@@ -3816,7 +5843,7 @@ class AssertionError extends Error {
         this.name = "AssertionError";
     }
 }
-function assert$3(cond, msg = "Assertion failed.") {
+function assert(cond, msg = "Assertion failed.") {
     if (!cond) {
         throw new AssertionError(msg);
     }
@@ -3880,7 +5907,7 @@ class DenoBuffer {
         return -1;
     }
     _reslice(len) {
-        assert$3(len <= this._buf.buffer.byteLength);
+        assert(len <= this._buf.buffer.byteLength);
         this._buf = new Uint8Array(this._buf.buffer, 0, len);
     }
     readByte() {
@@ -6665,7 +8692,7 @@ function credsAuthenticator(creds) {
 const DEFAULT_PING_INTERVAL = 2 * 60 * 1000;
 const DEFAULT_MAX_PING_OUT = 2;
 const DEFAULT_RECONNECT_TIME_WAIT = 2 * 1000;
-function defaultOptions$1() {
+function defaultOptions() {
     return {
         maxPingOut: 2,
         maxReconnectAttempts: 10,
@@ -6724,7 +8751,7 @@ function parseOptions(opts) {
             dhp
         ];
     }
-    const options = extend(defaultOptions$1(), opts);
+    const options = extend(defaultOptions(), opts);
     options.authenticator = buildAuthenticator(options);
     [
         "reconnectDelayHandler",
@@ -12554,18 +14581,26 @@ function connect(opts = {}) {
     return NatsConnectionImpl.connect(opts);
 }
 
+const formatErrorDetail = (errorDetail) => {
+    const { message, stack, extra, cause } = errorDetail;
+    const causeText = cause ? `\nCaused by: ${formatErrorDetail(cause)}` : "";
+    const extraText = extra
+        ? `\nExtra: ${JSON.stringify(extra, undefined, 2)}`
+        : "";
+    return [message, stack].filter(isDefined).join("\n") + extraText + causeText;
+};
 const errorToTextAsync = async (error) => {
     if (typeof error == "string") {
         return error;
-    }
-    if (error instanceof Error) {
-        return [error.message, error.stack].filter(isDefined).join("\n");
     }
     if (error instanceof Response) {
         const text = await error.text();
         return `${error.url} ${error.status} ${error.statusText} ${text}`;
     }
-    return safe(() => JSON.stringify(error, undefined, 2));
+    if (typeof error === "object" && error !== null && "message" in error) {
+        return formatErrorDetail(error);
+    }
+    return safe(() => JSON.stringify(error, undefined, 2)) ?? "";
 };
 
 const errorToErrorDetail = async ({ error, extra, stack, }) => {
@@ -12599,2651 +14634,42 @@ const natsHeadersToRecord = (headers) => {
     return result;
 };
 
-const ALGORITHM_BYTE_LENGTHS = {
-    "SHA-256": 32,
-    "SHA-512": 64,
-};
-
-const ALL_ALGORITHMS = ["SHA-256", "SHA-512"];
-
-function toMessage$1(message) {
-    if (typeof message === "string") {
-        return message;
-    }
-    const messageMaybe = message();
-    if (typeof messageMaybe === "string") {
-        return messageMaybe;
-    }
-    console.error("ASSERTION FAIL VALUE", messageMaybe);
-    return "Assertion Failed";
-}
-
-function assert$2(value, message = "Assertion failed") {
-    if (!value) {
-        throw new Error(toMessage$1(message));
-    }
-}
-
-const assertEqualElements$1 = (a, b, message = () => {
-    console.error(a, b);
-    return `Assertion failed: ${JSON.stringify(a)} is not equal to ${JSON.stringify(b)}`;
-}) => {
-    throw new Error("assertEqualElements: Bitrotted");
-    // if (a === b) {
-    //   return true;
-    // }
-    // if (!a || !b) {
-    //   return false;
-    // }
-    // const [aLength, bLength] = [lengthOf(a), lengthOf(b)];
-    // assertEqual(
-    //   aLength,
-    //   bLength,
-    //   message ||
-    //     `Assertion failed: array length ${aLength} not equal to ${bLength}`
-    // );
-    // for (let i = 0; i < aLength; i++) {
-    //   const aElement = a[i];
-    //   const bElement = b[i];
-    //   if (Array.isArray(aElement) && Array.isArray(bElement)) {
-    //     assertEqualElements(aElement, bElement, message);
-    //   } else {
-    //     assertEqual(
-    //       toStableValue(aElement),
-    //       toStableValue(bElement),
-    //       message ||
-    //         `Assertion failed: at index: a[${i}]=>${JSON.stringify(
-    //           aElement
-    //         )} not equal to b[${i}]=>${JSON.stringify(bElement)}`
-    //     );
-    //   }
-    // }
-};
-
-const assertEqual$1 = (a, b, message = () => {
-    console.error(a, b);
-    return `Assertion failed: ${JSON.stringify(a)} is not equal to ${JSON.stringify(b)}`;
-}) => {
-    if (Array.isArray(a) && Array.isArray(b)) {
-        return assertEqualElements$1(a, b, message);
-    }
-    return assert$2(a === b, message);
-};
-
-const assertNotEqual$1 = (a, b, message = () => {
-    console.error(a, b);
-    return `Assertion failed: ${JSON.stringify(a)} is equal to ${JSON.stringify(b)}`;
-}) => {
-    // if (Array.isArray(a) && Array.isArray(b)) {
-    //   return assertEqualElements(a, b, message);
-    // }
-    return assert$2(a !== b, message);
-};
-
-function assertType$2(value, typeGuard, message = "Assertion failed: Required value is not of correct type") {
-    if (!typeGuard(value)) {
-        throw new Error(toMessage$1(message));
-    }
-    return value;
-}
-
-function assertUnreachable$2(value, message = "Assertion failed: Reached what should be an unreachable section of code") {
-    throw new Error(toMessage$1(message));
-}
-
-function isValue$1(maybe) {
-    return maybe !== undefined && maybe !== null && !Number.isNaN(maybe);
-}
-
-function assertValue$2(maybe, message = "Assertion failed: Required value not defined") {
-    assert$2(isValue$1(maybe), message);
-    return maybe;
-}
-
-const Asserts$1 = {
-    assert: assert$2,
-    assertUnreachable: assertUnreachable$2,
-    assertValue: assertValue$2,
-    assertEqual: assertEqual$1,
-    assertNotEqual: assertNotEqual$1,
-    assertEqualElements: assertEqualElements$1,
-    assertType: assertType$2,
-};
-
-const arrayToFloat64Array = (arr) => {
-    const numbers = arr.flatMap((v) => {
-        if (typeof v === "number") {
-            return [v];
+const sendMessageError = (message) => async (error, options = {}) => {
+    const errorDetail = await errorToErrorDetail({
+        error,
+        extra: [message.subject],
+    });
+    const responseHeaders = headers();
+    if (isDefined(options.headers)) {
+        for (const [key, value] of Object.entries(options.headers)) {
+            responseHeaders.set(key, value);
         }
-        return JSON.stringify(v)
-            .split("")
-            .map((s) => s.codePointAt(0));
+    }
+    message.respond(Bytes.toMsgPack({ error: errorDetail }), {
+        headers: responseHeaders,
     });
-    return new Float64Array(numbers.length).map((_, i) => numbers[i]);
 };
 
-const toArrayBuffer = async (bytes) => {
-    if (bytes instanceof ArrayBuffer) {
-        return bytes;
-    }
-    if (bytes instanceof Blob) {
-        return bytes.arrayBuffer();
-    }
-    if (typeof bytes === "string") {
-        const encoder = new TextEncoder();
-        return encoder.encode(bytes);
-    }
-    if (ArrayBuffer.isView(bytes)) {
-        return bytes.buffer;
-    }
-    if (Array.isArray(bytes)) {
-        return arrayToFloat64Array(bytes);
-    }
-    return new ArrayBuffer(0);
-};
-
-const hashOf = async ({ bytes, algorithm = "SHA-512", }) => {
-    const buffer = await toArrayBuffer(bytes);
-    return crypto.subtle.digest(algorithm, buffer);
-};
-
-// @see https://stackoverflow.com/questions/40031688/javascript-arraybuffer-to-hex
-const encodeAsString = async (bytes, radix = 16) => {
-    const arr = await toArrayBuffer(bytes);
-    return [...new Uint8Array(arr)]
-        .map((x) => x.toString(radix).padStart(2, "0"))
-        .join("");
-};
-
-const addressStringOf = async ({ bytes, algorithm = "SHA-512", radix = 16, }) => {
-    const idRaw = await hashOf({ bytes: bytes, algorithm });
-    const encoded = await encodeAsString(idRaw, radix);
-    return `${algorithm}:${encoded}`;
-};
-
-const idStringToIdBytes = ({ id }) => {
-    const splitValue = id.split(":");
-    Asserts$1.assert(splitValue.length === 2);
-    // TODO only SHA FOR NOW
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const [algorithm, base64] = splitValue;
-    const binaryString = atob(base64);
-    const result = new Uint8Array(binaryString.length);
-    binaryString
-        .split("")
-        .map((s) => s.charCodeAt(0))
-        .forEach((b, i) => {
-        result[i] = b;
+const connectConnectionListenerToSubject = async ({ connection, subject, listener, options = {}, env = {}, signal, }) => {
+    const { log = () => { }, queue, maxMessages, timeout } = options;
+    log("connectConnectionListenerToSubject: subject: ", subject);
+    const subscription = connection.subscribe(subject, {
+        queue,
+        max: maxMessages,
+        timeout,
     });
-    return result;
-};
-
-const toText = async (bytes) => {
-    if (typeof bytes === "string") {
-        return bytes;
-    }
-    const arr = await toArrayBuffer(bytes);
-    const decoder = new TextDecoder();
-    return decoder.decode(arr);
-};
-
-// eslint-disable-next-line @typescript-eslint/ban-types
-const TESTS = [];
-TESTS.push(async () => {
-    const data = "test";
-    const arr = await toArrayBuffer(data);
-    const actual = await toText(arr);
-    return Asserts$1.assertEqual(data, actual);
-});
-TESTS.push(async () => {
-    return ALL_ALGORITHMS.map(async (algorithm) => {
-        const actual = await hashOf({ bytes: "test", algorithm });
-        return Asserts$1.assertEqual(actual.byteLength, ALGORITHM_BYTE_LENGTHS[algorithm]);
-    });
-});
-TESTS.push(async () => {
-    {
-        const actual = await addressStringOf({
-            bytes: "test",
-            algorithm: "SHA-256",
+    if (isDefined(signal)) {
+        if (signal.aborted) {
+            subscription.unsubscribe();
+            throw new Error("Signal already in aborted state");
+        }
+        signal.addEventListener("abort", () => {
+            subscription.unsubscribe();
         });
-        Asserts$1.assertEqual(actual, "SHA-256:n4bQgYhMfWWaL+qgxVrQFaO/TxsrC4Is0V1sFbDwCgg=");
     }
-    {
-        const actual = await addressStringOf({
-            bytes: "test",
-            algorithm: "SHA-512",
-        });
-        Asserts$1.assertEqual(actual, "SHA-512:7iaw3Ur350mqGo7jwQrpkj9hiYB3Lkc/iBml1JQODbJ6wYX4oOHV+E+IvIh/1nsUNzLDBMxfqa2Ob1f1ACio/w==");
-    }
-});
-TESTS.push(async () => {
-    return ALL_ALGORITHMS.map(async (algorithm) => {
-        const data = "test";
-        const id = await addressStringOf({ bytes: data, algorithm });
-        const idBytesExpected = new Uint8Array(await hashOf({ bytes: data, algorithm }));
-        const idBytes = idStringToIdBytes({ id });
-        return Asserts$1.assertEqualElements(idBytes, idBytesExpected);
-    });
-});
-const test = async () => {
-    const results = await Promise.all(TESTS.map(async (test) => {
-        try {
-            await test();
-            return true;
-        }
-        catch (error) {
-            console.error(error);
-            return false;
-        }
-    }));
-    if (results.find((v) => v === false)) {
-        throw new Error("TESTS FAILED");
-    }
-    console.log("TESTS PASS");
-    return true;
-};
-
-function arrayBufferToBase64(arrayBuffer) {
-    // need to clone array buffer to avoice 'detached' error
-    const uint8Array = new Uint8Array(arrayBuffer.slice(0));
-    let binaryString = "";
-    for (let i = 0; i < uint8Array.length; i++) {
-        binaryString += String.fromCharCode(uint8Array[i]);
-    }
-    return btoa(binaryString);
-}
-
-const arrayBufferToHex = (input) => {
-    const inputUint8Array = new Uint8Array(input);
-    const output = [];
-    for (let i = 0; i < inputUint8Array.length; ++i) {
-        output.push(inputUint8Array[i].toString(16).padStart(2, "0"));
-    }
-    return output.join("");
-};
-
-const arrayBufferToUtf8 = (input) => new TextDecoder().decode(new Uint8Array(input));
-
-const assignMediaTypeToBlob = (blob, mediaType) => {
-    return blob.slice(0, blob.size, mediaType);
-};
-
-const base64ToArrayBuffer = (input) => {
-    // Decode base64 string to a binary string.
-    const binaryString = globalThis.atob(input);
-    // Create a new ArrayBuffer with the same length as the binary string.
-    const length = binaryString.length;
-    const bytes = new Uint8Array(length);
-    // Iterate over each character in the binary string and fill the Uint8Array.
-    for (let i = 0; i < length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-    }
-    // The Uint8Array is backed by the ArrayBuffer, which we return.
-    return bytes.buffer;
-};
-
-const dataUrlToBlob = (dataUrl) => {
-    if (!dataUrl) {
-        return;
-    }
-    const arr = dataUrl.split(",");
-    const match = arr[0].match(/:(.*?);/) ?? [];
-    const mime = match[1];
-    const bstr = atob(arr[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) {
-        u8arr[n] = bstr.charCodeAt(n);
-    }
-    return new Blob([u8arr], { type: mime });
-};
-
-const immediateToArrayBuffer = (bytes) => {
-    if (bytes instanceof ArrayBuffer) {
-        return bytes;
-    }
-    if (typeof bytes === "string") {
-        const encoder = new TextEncoder();
-        return encoder.encode(bytes);
-    }
-    if (ArrayBuffer.isView(bytes)) {
-        return bytes.buffer;
-    }
-    if (Array.isArray(bytes)) {
-        return arrayToFloat64Array(bytes);
-    }
-    return new ArrayBuffer(0);
-};
-
-const immediateHashOf = async (bytes, algorithm) => {
-    const buffer = immediateToArrayBuffer(bytes);
-    return crypto.subtle.digest(algorithm, buffer);
-};
-
-const isImmediateByteLike = (maybe) => {
-    const straw = maybe;
-    if (straw instanceof ArrayBuffer) {
-        return true;
-    }
-    if (typeof straw === "string") {
-        return true;
-    }
-    if (ArrayBuffer.isView(straw)) {
-        return true;
-    }
-    if (Array.isArray(straw)) {
-        return true;
-    }
-    return false;
-};
-
-const isByteLike = (maybe) => {
-    if (maybe instanceof Blob) {
-        return true;
-    }
-    return isImmediateByteLike(maybe);
-};
-
-const lengthOf = (bytes) => {
-    if (typeof bytes === "string") {
-        return bytes.length;
-    }
-    if (bytes instanceof Blob) {
-        return bytes.size;
-    }
-    if (bytes instanceof ArrayBuffer) {
-        return bytes.byteLength;
-    }
-    if (ArrayBuffer.isView(bytes)) {
-        return bytes.byteLength;
-    }
-};
-
-var decoder;
-try {
-	decoder = new TextDecoder();
-} catch(error) {}
-var src;
-var srcEnd;
-var position$1 = 0;
-var currentUnpackr = {};
-var currentStructures;
-var srcString;
-var srcStringStart = 0;
-var srcStringEnd = 0;
-var bundledStrings$1;
-var referenceMap;
-var currentExtensions = [];
-var dataView;
-var defaultOptions = {
-	useRecords: false,
-	mapsAsObjects: true
-};
-class C1Type {}
-const C1 = new C1Type();
-C1.name = 'MessagePack 0xC1';
-var sequentialMode = false;
-var inlineObjectReadThreshold = 2;
-var readStruct;
-// no-eval build
-try {
-	new Function('');
-} catch(error) {
-	// if eval variants are not supported, do not create inline object readers ever
-	inlineObjectReadThreshold = Infinity;
-}
-
-class Unpackr {
-	constructor(options) {
-		if (options) {
-			if (options.useRecords === false && options.mapsAsObjects === undefined)
-				options.mapsAsObjects = true;
-			if (options.sequential && options.trusted !== false) {
-				options.trusted = true;
-				if (!options.structures && options.useRecords != false) {
-					options.structures = [];
-					if (!options.maxSharedStructures)
-						options.maxSharedStructures = 0;
-				}
-			}
-			if (options.structures)
-				options.structures.sharedLength = options.structures.length;
-			else if (options.getStructures) {
-				(options.structures = []).uninitialized = true; // this is what we use to denote an uninitialized structures
-				options.structures.sharedLength = 0;
-			}
-			if (options.int64AsNumber) {
-				options.int64AsType = 'number';
-			}
-		}
-		Object.assign(this, options);
-	}
-	unpack(source, options) {
-		if (src) {
-			// re-entrant execution, save the state and restore it after we do this unpack
-			return saveState(() => {
-				clearSource();
-				return this ? this.unpack(source, options) : Unpackr.prototype.unpack.call(defaultOptions, source, options)
-			})
-		}
-		if (!source.buffer && source.constructor === ArrayBuffer)
-			source = typeof Buffer !== 'undefined' ? Buffer.from(source) : new Uint8Array(source);
-		if (typeof options === 'object') {
-			srcEnd = options.end || source.length;
-			position$1 = options.start || 0;
-		} else {
-			position$1 = 0;
-			srcEnd = options > -1 ? options : source.length;
-		}
-		srcStringEnd = 0;
-		srcString = null;
-		bundledStrings$1 = null;
-		src = source;
-		// this provides cached access to the data view for a buffer if it is getting reused, which is a recommend
-		// technique for getting data from a database where it can be copied into an existing buffer instead of creating
-		// new ones
-		try {
-			dataView = source.dataView || (source.dataView = new DataView(source.buffer, source.byteOffset, source.byteLength));
-		} catch(error) {
-			// if it doesn't have a buffer, maybe it is the wrong type of object
-			src = null;
-			if (source instanceof Uint8Array)
-				throw error
-			throw new Error('Source must be a Uint8Array or Buffer but was a ' + ((source && typeof source == 'object') ? source.constructor.name : typeof source))
-		}
-		if (this instanceof Unpackr) {
-			currentUnpackr = this;
-			if (this.structures) {
-				currentStructures = this.structures;
-				return checkedRead(options)
-			} else if (!currentStructures || currentStructures.length > 0) {
-				currentStructures = [];
-			}
-		} else {
-			currentUnpackr = defaultOptions;
-			if (!currentStructures || currentStructures.length > 0)
-				currentStructures = [];
-		}
-		return checkedRead(options)
-	}
-	unpackMultiple(source, forEach) {
-		let values, lastPosition = 0;
-		try {
-			sequentialMode = true;
-			let size = source.length;
-			let value = this ? this.unpack(source, size) : defaultUnpackr.unpack(source, size);
-			if (forEach) {
-				if (forEach(value, lastPosition, position$1) === false) return;
-				while(position$1 < size) {
-					lastPosition = position$1;
-					if (forEach(checkedRead(), lastPosition, position$1) === false) {
-						return
-					}
-				}
-			}
-			else {
-				values = [ value ];
-				while(position$1 < size) {
-					lastPosition = position$1;
-					values.push(checkedRead());
-				}
-				return values
-			}
-		} catch(error) {
-			error.lastPosition = lastPosition;
-			error.values = values;
-			throw error
-		} finally {
-			sequentialMode = false;
-			clearSource();
-		}
-	}
-	_mergeStructures(loadedStructures, existingStructures) {
-		loadedStructures = loadedStructures || [];
-		if (Object.isFrozen(loadedStructures))
-			loadedStructures = loadedStructures.map(structure => structure.slice(0));
-		for (let i = 0, l = loadedStructures.length; i < l; i++) {
-			let structure = loadedStructures[i];
-			if (structure) {
-				structure.isShared = true;
-				if (i >= 32)
-					structure.highByte = (i - 32) >> 5;
-			}
-		}
-		loadedStructures.sharedLength = loadedStructures.length;
-		for (let id in existingStructures || []) {
-			if (id >= 0) {
-				let structure = loadedStructures[id];
-				let existing = existingStructures[id];
-				if (existing) {
-					if (structure)
-						(loadedStructures.restoreStructures || (loadedStructures.restoreStructures = []))[id] = structure;
-					loadedStructures[id] = existing;
-				}
-			}
-		}
-		return this.structures = loadedStructures
-	}
-	decode(source, options) {
-		return this.unpack(source, options)
-	}
-}
-function checkedRead(options) {
-	try {
-		if (!currentUnpackr.trusted && !sequentialMode) {
-			let sharedLength = currentStructures.sharedLength || 0;
-			if (sharedLength < currentStructures.length)
-				currentStructures.length = sharedLength;
-		}
-		let result;
-		if (currentUnpackr.randomAccessStructure && src[position$1] < 0x40 && src[position$1] >= 0x20 && readStruct) ; else
-			result = read();
-		if (bundledStrings$1) { // bundled strings to skip past
-			position$1 = bundledStrings$1.postBundlePosition;
-			bundledStrings$1 = null;
-		}
-		if (sequentialMode)
-			// we only need to restore the structures if there was an error, but if we completed a read,
-			// we can clear this out and keep the structures we read
-			currentStructures.restoreStructures = null;
-
-		if (position$1 == srcEnd) {
-			// finished reading this source, cleanup references
-			if (currentStructures && currentStructures.restoreStructures)
-				restoreStructures();
-			currentStructures = null;
-			src = null;
-			if (referenceMap)
-				referenceMap = null;
-		} else if (position$1 > srcEnd) {
-			// over read
-			throw new Error('Unexpected end of MessagePack data')
-		} else if (!sequentialMode) {
-			let jsonView;
-			try {
-				jsonView = JSON.stringify(result, (_, value) => typeof value === "bigint" ? `${value}n` : value).slice(0, 100);
-			} catch(error) {
-				jsonView = '(JSON view not available ' + error + ')';
-			}
-			throw new Error('Data read, but end of buffer not reached ' + jsonView)
-		}
-		// else more to read, but we are reading sequentially, so don't clear source yet
-		return result
-	} catch(error) {
-		if (currentStructures && currentStructures.restoreStructures)
-			restoreStructures();
-		clearSource();
-		if (error instanceof RangeError || error.message.startsWith('Unexpected end of buffer') || position$1 > srcEnd) {
-			error.incomplete = true;
-		}
-		throw error
-	}
-}
-
-function restoreStructures() {
-	for (let id in currentStructures.restoreStructures) {
-		currentStructures[id] = currentStructures.restoreStructures[id];
-	}
-	currentStructures.restoreStructures = null;
-}
-
-function read() {
-	let token = src[position$1++];
-	if (token < 0xa0) {
-		if (token < 0x80) {
-			if (token < 0x40)
-				return token
-			else {
-				let structure = currentStructures[token & 0x3f] ||
-					currentUnpackr.getStructures && loadStructures()[token & 0x3f];
-				if (structure) {
-					if (!structure.read) {
-						structure.read = createStructureReader(structure, token & 0x3f);
-					}
-					return structure.read()
-				} else
-					return token
-			}
-		} else if (token < 0x90) {
-			// map
-			token -= 0x80;
-			if (currentUnpackr.mapsAsObjects) {
-				let object = {};
-				for (let i = 0; i < token; i++) {
-					let key = readKey();
-					if (key === '__proto__')
-						key = '__proto_';
-					object[key] = read();
-				}
-				return object
-			} else {
-				let map = new Map();
-				for (let i = 0; i < token; i++) {
-					map.set(read(), read());
-				}
-				return map
-			}
-		} else {
-			token -= 0x90;
-			let array = new Array(token);
-			for (let i = 0; i < token; i++) {
-				array[i] = read();
-			}
-			if (currentUnpackr.freezeData)
-				return Object.freeze(array)
-			return array
-		}
-	} else if (token < 0xc0) {
-		// fixstr
-		let length = token - 0xa0;
-		if (srcStringEnd >= position$1) {
-			return srcString.slice(position$1 - srcStringStart, (position$1 += length) - srcStringStart)
-		}
-		if (srcStringEnd == 0 && srcEnd < 140) {
-			// for small blocks, avoiding the overhead of the extract call is helpful
-			let string = length < 16 ? shortStringInJS(length) : longStringInJS(length);
-			if (string != null)
-				return string
-		}
-		return readFixedString(length)
-	} else {
-		let value;
-		switch (token) {
-			case 0xc0: return null
-			case 0xc1:
-				if (bundledStrings$1) {
-					value = read(); // followed by the length of the string in characters (not bytes!)
-					if (value > 0)
-						return bundledStrings$1[1].slice(bundledStrings$1.position1, bundledStrings$1.position1 += value)
-					else
-						return bundledStrings$1[0].slice(bundledStrings$1.position0, bundledStrings$1.position0 -= value)
-				}
-				return C1; // "never-used", return special object to denote that
-			case 0xc2: return false
-			case 0xc3: return true
-			case 0xc4:
-				// bin 8
-				value = src[position$1++];
-				if (value === undefined)
-					throw new Error('Unexpected end of buffer')
-				return readBin(value)
-			case 0xc5:
-				// bin 16
-				value = dataView.getUint16(position$1);
-				position$1 += 2;
-				return readBin(value)
-			case 0xc6:
-				// bin 32
-				value = dataView.getUint32(position$1);
-				position$1 += 4;
-				return readBin(value)
-			case 0xc7:
-				// ext 8
-				return readExt(src[position$1++])
-			case 0xc8:
-				// ext 16
-				value = dataView.getUint16(position$1);
-				position$1 += 2;
-				return readExt(value)
-			case 0xc9:
-				// ext 32
-				value = dataView.getUint32(position$1);
-				position$1 += 4;
-				return readExt(value)
-			case 0xca:
-				value = dataView.getFloat32(position$1);
-				if (currentUnpackr.useFloat32 > 2) {
-					// this does rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
-					let multiplier = mult10[((src[position$1] & 0x7f) << 1) | (src[position$1 + 1] >> 7)];
-					position$1 += 4;
-					return ((multiplier * value + (value > 0 ? 0.5 : -0.5)) >> 0) / multiplier
-				}
-				position$1 += 4;
-				return value
-			case 0xcb:
-				value = dataView.getFloat64(position$1);
-				position$1 += 8;
-				return value
-			// uint handlers
-			case 0xcc:
-				return src[position$1++]
-			case 0xcd:
-				value = dataView.getUint16(position$1);
-				position$1 += 2;
-				return value
-			case 0xce:
-				value = dataView.getUint32(position$1);
-				position$1 += 4;
-				return value
-			case 0xcf:
-				if (currentUnpackr.int64AsType === 'number') {
-					value = dataView.getUint32(position$1) * 0x100000000;
-					value += dataView.getUint32(position$1 + 4);
-				} else if (currentUnpackr.int64AsType === 'string') {
-					value = dataView.getBigUint64(position$1).toString();
-				} else if (currentUnpackr.int64AsType === 'auto') {
-					value = dataView.getBigUint64(position$1);
-					if (value<=BigInt(2)<<BigInt(52)) value=Number(value);
-				} else
-					value = dataView.getBigUint64(position$1);
-				position$1 += 8;
-				return value
-
-			// int handlers
-			case 0xd0:
-				return dataView.getInt8(position$1++)
-			case 0xd1:
-				value = dataView.getInt16(position$1);
-				position$1 += 2;
-				return value
-			case 0xd2:
-				value = dataView.getInt32(position$1);
-				position$1 += 4;
-				return value
-			case 0xd3:
-				if (currentUnpackr.int64AsType === 'number') {
-					value = dataView.getInt32(position$1) * 0x100000000;
-					value += dataView.getUint32(position$1 + 4);
-				} else if (currentUnpackr.int64AsType === 'string') {
-					value = dataView.getBigInt64(position$1).toString();
-				} else if (currentUnpackr.int64AsType === 'auto') {
-					value = dataView.getBigInt64(position$1);
-					if (value>=BigInt(-2)<<BigInt(52)&&value<=BigInt(2)<<BigInt(52)) value=Number(value);
-				} else
-					value = dataView.getBigInt64(position$1);
-				position$1 += 8;
-				return value
-
-			case 0xd4:
-				// fixext 1
-				value = src[position$1++];
-				if (value == 0x72) {
-					return recordDefinition(src[position$1++] & 0x3f)
-				} else {
-					let extension = currentExtensions[value];
-					if (extension) {
-						if (extension.read) {
-							position$1++; // skip filler byte
-							return extension.read(read())
-						} else if (extension.noBuffer) {
-							position$1++; // skip filler byte
-							return extension()
-						} else
-							return extension(src.subarray(position$1, ++position$1))
-					} else
-						throw new Error('Unknown extension ' + value)
-				}
-			case 0xd5:
-				// fixext 2
-				value = src[position$1];
-				if (value == 0x72) {
-					position$1++;
-					return recordDefinition(src[position$1++] & 0x3f, src[position$1++])
-				} else
-					return readExt(2)
-			case 0xd6:
-				// fixext 4
-				return readExt(4)
-			case 0xd7:
-				// fixext 8
-				return readExt(8)
-			case 0xd8:
-				// fixext 16
-				return readExt(16)
-			case 0xd9:
-			// str 8
-				value = src[position$1++];
-				if (srcStringEnd >= position$1) {
-					return srcString.slice(position$1 - srcStringStart, (position$1 += value) - srcStringStart)
-				}
-				return readString8(value)
-			case 0xda:
-			// str 16
-				value = dataView.getUint16(position$1);
-				position$1 += 2;
-				if (srcStringEnd >= position$1) {
-					return srcString.slice(position$1 - srcStringStart, (position$1 += value) - srcStringStart)
-				}
-				return readString16(value)
-			case 0xdb:
-			// str 32
-				value = dataView.getUint32(position$1);
-				position$1 += 4;
-				if (srcStringEnd >= position$1) {
-					return srcString.slice(position$1 - srcStringStart, (position$1 += value) - srcStringStart)
-				}
-				return readString32(value)
-			case 0xdc:
-			// array 16
-				value = dataView.getUint16(position$1);
-				position$1 += 2;
-				return readArray(value)
-			case 0xdd:
-			// array 32
-				value = dataView.getUint32(position$1);
-				position$1 += 4;
-				return readArray(value)
-			case 0xde:
-			// map 16
-				value = dataView.getUint16(position$1);
-				position$1 += 2;
-				return readMap(value)
-			case 0xdf:
-			// map 32
-				value = dataView.getUint32(position$1);
-				position$1 += 4;
-				return readMap(value)
-			default: // negative int
-				if (token >= 0xe0)
-					return token - 0x100
-				if (token === undefined) {
-					let error = new Error('Unexpected end of MessagePack data');
-					error.incomplete = true;
-					throw error
-				}
-				throw new Error('Unknown MessagePack token ' + token)
-
-		}
-	}
-}
-const validName = /^[a-zA-Z_$][a-zA-Z\d_$]*$/;
-function createStructureReader(structure, firstId) {
-	function readObject() {
-		// This initial function is quick to instantiate, but runs slower. After several iterations pay the cost to build the faster function
-		if (readObject.count++ > inlineObjectReadThreshold) {
-			let readObject = structure.read = (new Function('r', 'return function(){return ' + (currentUnpackr.freezeData ? 'Object.freeze' : '') +
-				'({' + structure.map(key => key === '__proto__' ? '__proto_:r()' : validName.test(key) ? key + ':r()' : ('[' + JSON.stringify(key) + ']:r()')).join(',') + '})}'))(read);
-			if (structure.highByte === 0)
-				structure.read = createSecondByteReader(firstId, structure.read);
-			return readObject() // second byte is already read, if there is one so immediately read object
-		}
-		let object = {};
-		for (let i = 0, l = structure.length; i < l; i++) {
-			let key = structure[i];
-			if (key === '__proto__')
-				key = '__proto_';
-			object[key] = read();
-		}
-		if (currentUnpackr.freezeData)
-			return Object.freeze(object);
-		return object
-	}
-	readObject.count = 0;
-	if (structure.highByte === 0) {
-		return createSecondByteReader(firstId, readObject)
-	}
-	return readObject
-}
-
-const createSecondByteReader = (firstId, read0) => {
-	return function() {
-		let highByte = src[position$1++];
-		if (highByte === 0)
-			return read0()
-		let id = firstId < 32 ? -(firstId + (highByte << 5)) : firstId + (highByte << 5);
-		let structure = currentStructures[id] || loadStructures()[id];
-		if (!structure) {
-			throw new Error('Record id is not defined for ' + id)
-		}
-		if (!structure.read)
-			structure.read = createStructureReader(structure, firstId);
-		return structure.read()
-	}
-};
-
-function loadStructures() {
-	let loadedStructures = saveState(() => {
-		// save the state in case getStructures modifies our buffer
-		src = null;
-		return currentUnpackr.getStructures()
-	});
-	return currentStructures = currentUnpackr._mergeStructures(loadedStructures, currentStructures)
-}
-
-var readFixedString = readStringJS;
-var readString8 = readStringJS;
-var readString16 = readStringJS;
-var readString32 = readStringJS;
-function readStringJS(length) {
-	let result;
-	if (length < 16) {
-		if (result = shortStringInJS(length))
-			return result
-	}
-	if (length > 64 && decoder)
-		return decoder.decode(src.subarray(position$1, position$1 += length))
-	const end = position$1 + length;
-	const units = [];
-	result = '';
-	while (position$1 < end) {
-		const byte1 = src[position$1++];
-		if ((byte1 & 0x80) === 0) {
-			// 1 byte
-			units.push(byte1);
-		} else if ((byte1 & 0xe0) === 0xc0) {
-			// 2 bytes
-			const byte2 = src[position$1++] & 0x3f;
-			units.push(((byte1 & 0x1f) << 6) | byte2);
-		} else if ((byte1 & 0xf0) === 0xe0) {
-			// 3 bytes
-			const byte2 = src[position$1++] & 0x3f;
-			const byte3 = src[position$1++] & 0x3f;
-			units.push(((byte1 & 0x1f) << 12) | (byte2 << 6) | byte3);
-		} else if ((byte1 & 0xf8) === 0xf0) {
-			// 4 bytes
-			const byte2 = src[position$1++] & 0x3f;
-			const byte3 = src[position$1++] & 0x3f;
-			const byte4 = src[position$1++] & 0x3f;
-			let unit = ((byte1 & 0x07) << 0x12) | (byte2 << 0x0c) | (byte3 << 0x06) | byte4;
-			if (unit > 0xffff) {
-				unit -= 0x10000;
-				units.push(((unit >>> 10) & 0x3ff) | 0xd800);
-				unit = 0xdc00 | (unit & 0x3ff);
-			}
-			units.push(unit);
-		} else {
-			units.push(byte1);
-		}
-
-		if (units.length >= 0x1000) {
-			result += fromCharCode.apply(String, units);
-			units.length = 0;
-		}
-	}
-
-	if (units.length > 0) {
-		result += fromCharCode.apply(String, units);
-	}
-
-	return result
-}
-
-function readArray(length) {
-	let array = new Array(length);
-	for (let i = 0; i < length; i++) {
-		array[i] = read();
-	}
-	if (currentUnpackr.freezeData)
-		return Object.freeze(array)
-	return array
-}
-
-function readMap(length) {
-	if (currentUnpackr.mapsAsObjects) {
-		let object = {};
-		for (let i = 0; i < length; i++) {
-			let key = readKey();
-			if (key === '__proto__')
-				key = '__proto_';
-			object[key] = read();
-		}
-		return object
-	} else {
-		let map = new Map();
-		for (let i = 0; i < length; i++) {
-			map.set(read(), read());
-		}
-		return map
-	}
-}
-
-var fromCharCode = String.fromCharCode;
-function longStringInJS(length) {
-	let start = position$1;
-	let bytes = new Array(length);
-	for (let i = 0; i < length; i++) {
-		const byte = src[position$1++];
-		if ((byte & 0x80) > 0) {
-				position$1 = start;
-				return
-			}
-			bytes[i] = byte;
-		}
-		return fromCharCode.apply(String, bytes)
-}
-function shortStringInJS(length) {
-	if (length < 4) {
-		if (length < 2) {
-			if (length === 0)
-				return ''
-			else {
-				let a = src[position$1++];
-				if ((a & 0x80) > 1) {
-					position$1 -= 1;
-					return
-				}
-				return fromCharCode(a)
-			}
-		} else {
-			let a = src[position$1++];
-			let b = src[position$1++];
-			if ((a & 0x80) > 0 || (b & 0x80) > 0) {
-				position$1 -= 2;
-				return
-			}
-			if (length < 3)
-				return fromCharCode(a, b)
-			let c = src[position$1++];
-			if ((c & 0x80) > 0) {
-				position$1 -= 3;
-				return
-			}
-			return fromCharCode(a, b, c)
-		}
-	} else {
-		let a = src[position$1++];
-		let b = src[position$1++];
-		let c = src[position$1++];
-		let d = src[position$1++];
-		if ((a & 0x80) > 0 || (b & 0x80) > 0 || (c & 0x80) > 0 || (d & 0x80) > 0) {
-			position$1 -= 4;
-			return
-		}
-		if (length < 6) {
-			if (length === 4)
-				return fromCharCode(a, b, c, d)
-			else {
-				let e = src[position$1++];
-				if ((e & 0x80) > 0) {
-					position$1 -= 5;
-					return
-				}
-				return fromCharCode(a, b, c, d, e)
-			}
-		} else if (length < 8) {
-			let e = src[position$1++];
-			let f = src[position$1++];
-			if ((e & 0x80) > 0 || (f & 0x80) > 0) {
-				position$1 -= 6;
-				return
-			}
-			if (length < 7)
-				return fromCharCode(a, b, c, d, e, f)
-			let g = src[position$1++];
-			if ((g & 0x80) > 0) {
-				position$1 -= 7;
-				return
-			}
-			return fromCharCode(a, b, c, d, e, f, g)
-		} else {
-			let e = src[position$1++];
-			let f = src[position$1++];
-			let g = src[position$1++];
-			let h = src[position$1++];
-			if ((e & 0x80) > 0 || (f & 0x80) > 0 || (g & 0x80) > 0 || (h & 0x80) > 0) {
-				position$1 -= 8;
-				return
-			}
-			if (length < 10) {
-				if (length === 8)
-					return fromCharCode(a, b, c, d, e, f, g, h)
-				else {
-					let i = src[position$1++];
-					if ((i & 0x80) > 0) {
-						position$1 -= 9;
-						return
-					}
-					return fromCharCode(a, b, c, d, e, f, g, h, i)
-				}
-			} else if (length < 12) {
-				let i = src[position$1++];
-				let j = src[position$1++];
-				if ((i & 0x80) > 0 || (j & 0x80) > 0) {
-					position$1 -= 10;
-					return
-				}
-				if (length < 11)
-					return fromCharCode(a, b, c, d, e, f, g, h, i, j)
-				let k = src[position$1++];
-				if ((k & 0x80) > 0) {
-					position$1 -= 11;
-					return
-				}
-				return fromCharCode(a, b, c, d, e, f, g, h, i, j, k)
-			} else {
-				let i = src[position$1++];
-				let j = src[position$1++];
-				let k = src[position$1++];
-				let l = src[position$1++];
-				if ((i & 0x80) > 0 || (j & 0x80) > 0 || (k & 0x80) > 0 || (l & 0x80) > 0) {
-					position$1 -= 12;
-					return
-				}
-				if (length < 14) {
-					if (length === 12)
-						return fromCharCode(a, b, c, d, e, f, g, h, i, j, k, l)
-					else {
-						let m = src[position$1++];
-						if ((m & 0x80) > 0) {
-							position$1 -= 13;
-							return
-						}
-						return fromCharCode(a, b, c, d, e, f, g, h, i, j, k, l, m)
-					}
-				} else {
-					let m = src[position$1++];
-					let n = src[position$1++];
-					if ((m & 0x80) > 0 || (n & 0x80) > 0) {
-						position$1 -= 14;
-						return
-					}
-					if (length < 15)
-						return fromCharCode(a, b, c, d, e, f, g, h, i, j, k, l, m, n)
-					let o = src[position$1++];
-					if ((o & 0x80) > 0) {
-						position$1 -= 15;
-						return
-					}
-					return fromCharCode(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o)
-				}
-			}
-		}
-	}
-}
-
-function readOnlyJSString() {
-	let token = src[position$1++];
-	let length;
-	if (token < 0xc0) {
-		// fixstr
-		length = token - 0xa0;
-	} else {
-		switch(token) {
-			case 0xd9:
-			// str 8
-				length = src[position$1++];
-				break
-			case 0xda:
-			// str 16
-				length = dataView.getUint16(position$1);
-				position$1 += 2;
-				break
-			case 0xdb:
-			// str 32
-				length = dataView.getUint32(position$1);
-				position$1 += 4;
-				break
-			default:
-				throw new Error('Expected string')
-		}
-	}
-	return readStringJS(length)
-}
-
-
-function readBin(length) {
-	return currentUnpackr.copyBuffers ?
-		// specifically use the copying slice (not the node one)
-		Uint8Array.prototype.slice.call(src, position$1, position$1 += length) :
-		src.subarray(position$1, position$1 += length)
-}
-function readExt(length) {
-	let type = src[position$1++];
-	if (currentExtensions[type]) {
-		let end;
-		return currentExtensions[type](src.subarray(position$1, end = (position$1 += length)), (readPosition) => {
-			position$1 = readPosition;
-			try {
-				return read();
-			} finally {
-				position$1 = end;
-			}
-		})
-	}
-	else
-		throw new Error('Unknown extension type ' + type)
-}
-
-var keyCache = new Array(4096);
-function readKey() {
-	let length = src[position$1++];
-	if (length >= 0xa0 && length < 0xc0) {
-		// fixstr, potentially use key cache
-		length = length - 0xa0;
-		if (srcStringEnd >= position$1) // if it has been extracted, must use it (and faster anyway)
-			return srcString.slice(position$1 - srcStringStart, (position$1 += length) - srcStringStart)
-		else if (!(srcStringEnd == 0 && srcEnd < 180))
-			return readFixedString(length)
-	} else { // not cacheable, go back and do a standard read
-		position$1--;
-		return asSafeString(read())
-	}
-	let key = ((length << 5) ^ (length > 1 ? dataView.getUint16(position$1) : length > 0 ? src[position$1] : 0)) & 0xfff;
-	let entry = keyCache[key];
-	let checkPosition = position$1;
-	let end = position$1 + length - 3;
-	let chunk;
-	let i = 0;
-	if (entry && entry.bytes == length) {
-		while (checkPosition < end) {
-			chunk = dataView.getUint32(checkPosition);
-			if (chunk != entry[i++]) {
-				checkPosition = 0x70000000;
-				break
-			}
-			checkPosition += 4;
-		}
-		end += 3;
-		while (checkPosition < end) {
-			chunk = src[checkPosition++];
-			if (chunk != entry[i++]) {
-				checkPosition = 0x70000000;
-				break
-			}
-		}
-		if (checkPosition === end) {
-			position$1 = checkPosition;
-			return entry.string
-		}
-		end -= 3;
-		checkPosition = position$1;
-	}
-	entry = [];
-	keyCache[key] = entry;
-	entry.bytes = length;
-	while (checkPosition < end) {
-		chunk = dataView.getUint32(checkPosition);
-		entry.push(chunk);
-		checkPosition += 4;
-	}
-	end += 3;
-	while (checkPosition < end) {
-		chunk = src[checkPosition++];
-		entry.push(chunk);
-	}
-	// for small blocks, avoiding the overhead of the extract call is helpful
-	let string = length < 16 ? shortStringInJS(length) : longStringInJS(length);
-	if (string != null)
-		return entry.string = string
-	return entry.string = readFixedString(length)
-}
-
-function asSafeString(property) {
-	// protect against expensive (DoS) string conversions
-	if (typeof property === 'string') return property;
-	if (typeof property === 'number' || typeof property === 'boolean' || typeof property === 'bigint') return property.toString();
-	if (property == null) return property + '';
-	throw new Error('Invalid property type for record', typeof property);
-}
-// the registration of the record definition extension (as "r")
-const recordDefinition = (id, highByte) => {
-	let structure = read().map(asSafeString); // ensure that all keys are strings and
-	// that the array is mutable
-	let firstByte = id;
-	if (highByte !== undefined) {
-		id = id < 32 ? -((highByte << 5) + id) : ((highByte << 5) + id);
-		structure.highByte = highByte;
-	}
-	let existingStructure = currentStructures[id];
-	// If it is a shared structure, we need to restore any changes after reading.
-	// Also in sequential mode, we may get incomplete reads and thus errors, and we need to restore
-	// to the state prior to an incomplete read in order to properly resume.
-	if (existingStructure && (existingStructure.isShared || sequentialMode)) {
-		(currentStructures.restoreStructures || (currentStructures.restoreStructures = []))[id] = existingStructure;
-	}
-	currentStructures[id] = structure;
-	structure.read = createStructureReader(structure, firstByte);
-	return structure.read()
-};
-currentExtensions[0] = () => {}; // notepack defines extension 0 to mean undefined, so use that as the default here
-currentExtensions[0].noBuffer = true;
-
-currentExtensions[0x42] = (data) => {
-	// decode bigint
-	let length = data.length;
-	let value = BigInt(data[0] & 0x80 ? data[0] - 0x100 : data[0]);
-	for (let i = 1; i < length; i++) {
-		value <<= BigInt(8);
-		value += BigInt(data[i]);
-	}
-	return value;
-};
-
-let errors = { Error, TypeError, ReferenceError };
-currentExtensions[0x65] = () => {
-	let data = read();
-	return (errors[data[0]] || Error)(data[1], { cause: data[2] })
-};
-
-currentExtensions[0x69] = (data) => {
-	// id extension (for structured clones)
-	if (currentUnpackr.structuredClone === false) throw new Error('Structured clone extension is disabled')
-	let id = dataView.getUint32(position$1 - 4);
-	if (!referenceMap)
-		referenceMap = new Map();
-	let token = src[position$1];
-	let target;
-	// TODO: handle Maps, Sets, and other types that can cycle; this is complicated, because you potentially need to read
-	// ahead past references to record structure definitions
-	if (token >= 0x90 && token < 0xa0 || token == 0xdc || token == 0xdd)
-		target = [];
-	else
-		target = {};
-
-	let refEntry = { target }; // a placeholder object
-	referenceMap.set(id, refEntry);
-	let targetProperties = read(); // read the next value as the target object to id
-	if (refEntry.used) // there is a cycle, so we have to assign properties to original target
-		return Object.assign(target, targetProperties)
-	refEntry.target = targetProperties; // the placeholder wasn't used, replace with the deserialized one
-	return targetProperties // no cycle, can just use the returned read object
-};
-
-currentExtensions[0x70] = (data) => {
-	// pointer extension (for structured clones)
-	if (currentUnpackr.structuredClone === false) throw new Error('Structured clone extension is disabled')
-	let id = dataView.getUint32(position$1 - 4);
-	let refEntry = referenceMap.get(id);
-	refEntry.used = true;
-	return refEntry.target
-};
-
-currentExtensions[0x73] = () => new Set(read());
-
-const typedArrays = ['Int8','Uint8','Uint8Clamped','Int16','Uint16','Int32','Uint32','Float32','Float64','BigInt64','BigUint64'].map(type => type + 'Array');
-
-let glbl = typeof globalThis === 'object' ? globalThis : window;
-currentExtensions[0x74] = (data) => {
-	let typeCode = data[0];
-	let typedArrayName = typedArrays[typeCode];
-	if (!typedArrayName) {
-		if (typeCode === 16) {
-			let ab = new ArrayBuffer(data.length - 1);
-			let u8 = new Uint8Array(ab);
-			u8.set(data.subarray(1));
-			return ab;
-		}
-		throw new Error('Could not find typed array for code ' + typeCode)
-	}
-	// we have to always slice/copy here to get a new ArrayBuffer that is word/byte aligned
-	return new glbl[typedArrayName](Uint8Array.prototype.slice.call(data, 1).buffer)
-};
-currentExtensions[0x78] = () => {
-	let data = read();
-	return new RegExp(data[0], data[1])
-};
-const TEMP_BUNDLE = [];
-currentExtensions[0x62] = (data) => {
-	let dataSize = (data[0] << 24) + (data[1] << 16) + (data[2] << 8) + data[3];
-	let dataPosition = position$1;
-	position$1 += dataSize - data.length;
-	bundledStrings$1 = TEMP_BUNDLE;
-	bundledStrings$1 = [readOnlyJSString(), readOnlyJSString()];
-	bundledStrings$1.position0 = 0;
-	bundledStrings$1.position1 = 0;
-	bundledStrings$1.postBundlePosition = position$1;
-	position$1 = dataPosition;
-	return read()
-};
-
-currentExtensions[0xff] = (data) => {
-	// 32-bit date extension
-	if (data.length == 4)
-		return new Date((data[0] * 0x1000000 + (data[1] << 16) + (data[2] << 8) + data[3]) * 1000)
-	else if (data.length == 8)
-		return new Date(
-			((data[0] << 22) + (data[1] << 14) + (data[2] << 6) + (data[3] >> 2)) / 1000000 +
-			((data[3] & 0x3) * 0x100000000 + data[4] * 0x1000000 + (data[5] << 16) + (data[6] << 8) + data[7]) * 1000)
-	else if (data.length == 12)// TODO: Implement support for negative
-		return new Date(
-			((data[0] << 24) + (data[1] << 16) + (data[2] << 8) + data[3]) / 1000000 +
-			(((data[4] & 0x80) ? -281474976710656 : 0) + data[6] * 0x10000000000 + data[7] * 0x100000000 + data[8] * 0x1000000 + (data[9] << 16) + (data[10] << 8) + data[11]) * 1000)
-	else
-		return new Date('invalid')
-}; // notepack defines extension 0 to mean undefined, so use that as the default here
-// registration of bulk record definition?
-// currentExtensions[0x52] = () =>
-
-function saveState(callback) {
-	let savedSrcEnd = srcEnd;
-	let savedPosition = position$1;
-	let savedSrcStringStart = srcStringStart;
-	let savedSrcStringEnd = srcStringEnd;
-	let savedSrcString = srcString;
-	let savedReferenceMap = referenceMap;
-	let savedBundledStrings = bundledStrings$1;
-
-	// TODO: We may need to revisit this if we do more external calls to user code (since it could be slow)
-	let savedSrc = new Uint8Array(src.slice(0, srcEnd)); // we copy the data in case it changes while external data is processed
-	let savedStructures = currentStructures;
-	let savedStructuresContents = currentStructures.slice(0, currentStructures.length);
-	let savedPackr = currentUnpackr;
-	let savedSequentialMode = sequentialMode;
-	let value = callback();
-	srcEnd = savedSrcEnd;
-	position$1 = savedPosition;
-	srcStringStart = savedSrcStringStart;
-	srcStringEnd = savedSrcStringEnd;
-	srcString = savedSrcString;
-	referenceMap = savedReferenceMap;
-	bundledStrings$1 = savedBundledStrings;
-	src = savedSrc;
-	sequentialMode = savedSequentialMode;
-	currentStructures = savedStructures;
-	currentStructures.splice(0, currentStructures.length, ...savedStructuresContents);
-	currentUnpackr = savedPackr;
-	dataView = new DataView(src.buffer, src.byteOffset, src.byteLength);
-	return value
-}
-function clearSource() {
-	src = null;
-	referenceMap = null;
-	currentStructures = null;
-}
-
-const mult10 = new Array(147); // this is a table matching binary exponents to the multiplier to determine significant digit rounding
-for (let i = 0; i < 256; i++) {
-	mult10[i] = +('1e' + Math.floor(45.15 - i * 0.30103));
-}
-var defaultUnpackr = new Unpackr({ useRecords: false });
-defaultUnpackr.unpack;
-defaultUnpackr.unpackMultiple;
-defaultUnpackr.unpack;
-let f32Array = new Float32Array(1);
-new Uint8Array(f32Array.buffer, 0, 4);
-
-let textEncoder;
-try {
-	textEncoder = new TextEncoder();
-} catch (error) {}
-let extensions, extensionClasses;
-const hasNodeBuffer = typeof Buffer !== 'undefined';
-const ByteArrayAllocate = hasNodeBuffer ?
-	function(length) { return Buffer.allocUnsafeSlow(length) } : Uint8Array;
-const ByteArray = hasNodeBuffer ? Buffer : Uint8Array;
-const MAX_BUFFER_SIZE = hasNodeBuffer ? 0x100000000 : 0x7fd00000;
-let target, keysTarget;
-let targetView;
-let position = 0;
-let safeEnd;
-let bundledStrings = null;
-let writeStructSlots;
-const MAX_BUNDLE_SIZE = 0x5500; // maximum characters such that the encoded bytes fits in 16 bits.
-const hasNonLatin = /[\u0080-\uFFFF]/;
-const RECORD_SYMBOL = Symbol('record-id');
-class Packr extends Unpackr {
-	constructor(options) {
-		super(options);
-		this.offset = 0;
-		let start;
-		let hasSharedUpdate;
-		let structures;
-		let referenceMap;
-		let encodeUtf8 = ByteArray.prototype.utf8Write ? function(string, position) {
-			return target.utf8Write(string, position, target.byteLength - position)
-		} : (textEncoder && textEncoder.encodeInto) ?
-			function(string, position) {
-				return textEncoder.encodeInto(string, target.subarray(position)).written
-			} : false;
-
-		let packr = this;
-		if (!options)
-			options = {};
-		let isSequential = options && options.sequential;
-		let hasSharedStructures = options.structures || options.saveStructures;
-		let maxSharedStructures = options.maxSharedStructures;
-		if (maxSharedStructures == null)
-			maxSharedStructures = hasSharedStructures ? 32 : 0;
-		if (maxSharedStructures > 8160)
-			throw new Error('Maximum maxSharedStructure is 8160')
-		if (options.structuredClone && options.moreTypes == undefined) {
-			this.moreTypes = true;
-		}
-		let maxOwnStructures = options.maxOwnStructures;
-		if (maxOwnStructures == null)
-			maxOwnStructures = hasSharedStructures ? 32 : 64;
-		if (!this.structures && options.useRecords != false)
-			this.structures = [];
-		// two byte record ids for shared structures
-		let useTwoByteRecords = maxSharedStructures > 32 || (maxOwnStructures + maxSharedStructures > 64);
-		let sharedLimitId = maxSharedStructures + 0x40;
-		let maxStructureId = maxSharedStructures + maxOwnStructures + 0x40;
-		if (maxStructureId > 8256) {
-			throw new Error('Maximum maxSharedStructure + maxOwnStructure is 8192')
-		}
-		let recordIdsToRemove = [];
-		let transitionsCount = 0;
-		let serializationsSinceTransitionRebuild = 0;
-
-		this.pack = this.encode = function(value, encodeOptions) {
-			if (!target) {
-				target = new ByteArrayAllocate(8192);
-				targetView = target.dataView || (target.dataView = new DataView(target.buffer, 0, 8192));
-				position = 0;
-			}
-			safeEnd = target.length - 10;
-			if (safeEnd - position < 0x800) {
-				// don't start too close to the end,
-				target = new ByteArrayAllocate(target.length);
-				targetView = target.dataView || (target.dataView = new DataView(target.buffer, 0, target.length));
-				safeEnd = target.length - 10;
-				position = 0;
-			} else
-				position = (position + 7) & 0x7ffffff8; // Word align to make any future copying of this buffer faster
-			start = position;
-			if (encodeOptions & RESERVE_START_SPACE) position += (encodeOptions & 0xff);
-			referenceMap = packr.structuredClone ? new Map() : null;
-			if (packr.bundleStrings && typeof value !== 'string') {
-				bundledStrings = [];
-				bundledStrings.size = Infinity; // force a new bundle start on first string
-			} else
-				bundledStrings = null;
-			structures = packr.structures;
-			if (structures) {
-				if (structures.uninitialized)
-					structures = packr._mergeStructures(packr.getStructures());
-				let sharedLength = structures.sharedLength || 0;
-				if (sharedLength > maxSharedStructures) {
-					//if (maxSharedStructures <= 32 && structures.sharedLength > 32) // TODO: could support this, but would need to update the limit ids
-					throw new Error('Shared structures is larger than maximum shared structures, try increasing maxSharedStructures to ' + structures.sharedLength)
-				}
-				if (!structures.transitions) {
-					// rebuild our structure transitions
-					structures.transitions = Object.create(null);
-					for (let i = 0; i < sharedLength; i++) {
-						let keys = structures[i];
-						if (!keys)
-							continue
-						let nextTransition, transition = structures.transitions;
-						for (let j = 0, l = keys.length; j < l; j++) {
-							let key = keys[j];
-							nextTransition = transition[key];
-							if (!nextTransition) {
-								nextTransition = transition[key] = Object.create(null);
-							}
-							transition = nextTransition;
-						}
-						transition[RECORD_SYMBOL] = i + 0x40;
-					}
-					this.lastNamedStructuresLength = sharedLength;
-				}
-				if (!isSequential) {
-					structures.nextId = sharedLength + 0x40;
-				}
-			}
-			if (hasSharedUpdate)
-				hasSharedUpdate = false;
-			let encodingError;
-			try {
-				if (packr.randomAccessStructure && value && value.constructor && value.constructor === Object)
-					writeStruct(value);
-				else
-					pack(value);
-				let lastBundle = bundledStrings;
-				if (bundledStrings)
-					writeBundles(start, pack, 0);
-				if (referenceMap && referenceMap.idsToInsert) {
-					let idsToInsert = referenceMap.idsToInsert.sort((a, b) => a.offset > b.offset ? 1 : -1);
-					let i = idsToInsert.length;
-					let incrementPosition = -1;
-					while (lastBundle && i > 0) {
-						let insertionPoint = idsToInsert[--i].offset + start;
-						if (insertionPoint < (lastBundle.stringsPosition + start) && incrementPosition === -1)
-							incrementPosition = 0;
-						if (insertionPoint > (lastBundle.position + start)) {
-							if (incrementPosition >= 0)
-								incrementPosition += 6;
-						} else {
-							if (incrementPosition >= 0) {
-								// update the bundle reference now
-								targetView.setUint32(lastBundle.position + start,
-									targetView.getUint32(lastBundle.position + start) + incrementPosition);
-								incrementPosition = -1; // reset
-							}
-							lastBundle = lastBundle.previous;
-							i++;
-						}
-					}
-					if (incrementPosition >= 0 && lastBundle) {
-						// update the bundle reference now
-						targetView.setUint32(lastBundle.position + start,
-							targetView.getUint32(lastBundle.position + start) + incrementPosition);
-					}
-					position += idsToInsert.length * 6;
-					if (position > safeEnd)
-						makeRoom(position);
-					packr.offset = position;
-					let serialized = insertIds(target.subarray(start, position), idsToInsert);
-					referenceMap = null;
-					return serialized
-				}
-				packr.offset = position; // update the offset so next serialization doesn't write over our buffer, but can continue writing to same buffer sequentially
-				if (encodeOptions & REUSE_BUFFER_MODE) {
-					target.start = start;
-					target.end = position;
-					return target
-				}
-				return target.subarray(start, position) // position can change if we call pack again in saveStructures, so we get the buffer now
-			} catch(error) {
-				encodingError = error;
-				throw error;
-			} finally {
-				if (structures) {
-					resetStructures();
-					if (hasSharedUpdate && packr.saveStructures) {
-						let sharedLength = structures.sharedLength || 0;
-						// we can't rely on start/end with REUSE_BUFFER_MODE since they will (probably) change when we save
-						let returnBuffer = target.subarray(start, position);
-						let newSharedData = prepareStructures(structures, packr);
-						if (!encodingError) { // TODO: If there is an encoding error, should make the structures as uninitialized so they get rebuilt next time
-							if (packr.saveStructures(newSharedData, newSharedData.isCompatible) === false) {
-								// get updated structures and try again if the update failed
-								return packr.pack(value, encodeOptions)
-							}
-							packr.lastNamedStructuresLength = sharedLength;
-							// don't keep large buffers around
-							if (target.length > 0x40000000) target = null;
-							return returnBuffer
-						}
-					}
-				}
-				// don't keep large buffers around, they take too much memory and cause problems (limit at 1GB)
-				if (target.length > 0x40000000) target = null;
-				if (encodeOptions & RESET_BUFFER_MODE)
-					position = start;
-			}
-		};
-		const resetStructures = () => {
-			if (serializationsSinceTransitionRebuild < 10)
-				serializationsSinceTransitionRebuild++;
-			let sharedLength = structures.sharedLength || 0;
-			if (structures.length > sharedLength && !isSequential)
-				structures.length = sharedLength;
-			if (transitionsCount > 10000) {
-				// force a rebuild occasionally after a lot of transitions so it can get cleaned up
-				structures.transitions = null;
-				serializationsSinceTransitionRebuild = 0;
-				transitionsCount = 0;
-				if (recordIdsToRemove.length > 0)
-					recordIdsToRemove = [];
-			} else if (recordIdsToRemove.length > 0 && !isSequential) {
-				for (let i = 0, l = recordIdsToRemove.length; i < l; i++) {
-					recordIdsToRemove[i][RECORD_SYMBOL] = 0;
-				}
-				recordIdsToRemove = [];
-			}
-		};
-		const packArray = (value) => {
-			var length = value.length;
-			if (length < 0x10) {
-				target[position++] = 0x90 | length;
-			} else if (length < 0x10000) {
-				target[position++] = 0xdc;
-				target[position++] = length >> 8;
-				target[position++] = length & 0xff;
-			} else {
-				target[position++] = 0xdd;
-				targetView.setUint32(position, length);
-				position += 4;
-			}
-			for (let i = 0; i < length; i++) {
-				pack(value[i]);
-			}
-		};
-		const pack = (value) => {
-			if (position > safeEnd)
-				target = makeRoom(position);
-
-			var type = typeof value;
-			var length;
-			if (type === 'string') {
-				let strLength = value.length;
-				if (bundledStrings && strLength >= 4 && strLength < 0x1000) {
-					if ((bundledStrings.size += strLength) > MAX_BUNDLE_SIZE) {
-						let extStart;
-						let maxBytes = (bundledStrings[0] ? bundledStrings[0].length * 3 + bundledStrings[1].length : 0) + 10;
-						if (position + maxBytes > safeEnd)
-							target = makeRoom(position + maxBytes);
-						let lastBundle;
-						if (bundledStrings.position) { // here we use the 0x62 extension to write the last bundle and reserve space for the reference pointer to the next/current bundle
-							lastBundle = bundledStrings;
-							target[position] = 0xc8; // ext 16
-							position += 3; // reserve for the writing bundle size
-							target[position++] = 0x62; // 'b'
-							extStart = position - start;
-							position += 4; // reserve for writing bundle reference
-							writeBundles(start, pack, 0); // write the last bundles
-							targetView.setUint16(extStart + start - 3, position - start - extStart);
-						} else { // here we use the 0x62 extension just to reserve the space for the reference pointer to the bundle (will be updated once the bundle is written)
-							target[position++] = 0xd6; // fixext 4
-							target[position++] = 0x62; // 'b'
-							extStart = position - start;
-							position += 4; // reserve for writing bundle reference
-						}
-						bundledStrings = ['', '']; // create new ones
-						bundledStrings.previous = lastBundle;
-						bundledStrings.size = 0;
-						bundledStrings.position = extStart;
-					}
-					let twoByte = hasNonLatin.test(value);
-					bundledStrings[twoByte ? 0 : 1] += value;
-					target[position++] = 0xc1;
-					pack(twoByte ? -strLength : strLength);
-					return
-				}
-				let headerSize;
-				// first we estimate the header size, so we can write to the correct location
-				if (strLength < 0x20) {
-					headerSize = 1;
-				} else if (strLength < 0x100) {
-					headerSize = 2;
-				} else if (strLength < 0x10000) {
-					headerSize = 3;
-				} else {
-					headerSize = 5;
-				}
-				let maxBytes = strLength * 3;
-				if (position + maxBytes > safeEnd)
-					target = makeRoom(position + maxBytes);
-
-				if (strLength < 0x40 || !encodeUtf8) {
-					let i, c1, c2, strPosition = position + headerSize;
-					for (i = 0; i < strLength; i++) {
-						c1 = value.charCodeAt(i);
-						if (c1 < 0x80) {
-							target[strPosition++] = c1;
-						} else if (c1 < 0x800) {
-							target[strPosition++] = c1 >> 6 | 0xc0;
-							target[strPosition++] = c1 & 0x3f | 0x80;
-						} else if (
-							(c1 & 0xfc00) === 0xd800 &&
-							((c2 = value.charCodeAt(i + 1)) & 0xfc00) === 0xdc00
-						) {
-							c1 = 0x10000 + ((c1 & 0x03ff) << 10) + (c2 & 0x03ff);
-							i++;
-							target[strPosition++] = c1 >> 18 | 0xf0;
-							target[strPosition++] = c1 >> 12 & 0x3f | 0x80;
-							target[strPosition++] = c1 >> 6 & 0x3f | 0x80;
-							target[strPosition++] = c1 & 0x3f | 0x80;
-						} else {
-							target[strPosition++] = c1 >> 12 | 0xe0;
-							target[strPosition++] = c1 >> 6 & 0x3f | 0x80;
-							target[strPosition++] = c1 & 0x3f | 0x80;
-						}
-					}
-					length = strPosition - position - headerSize;
-				} else {
-					length = encodeUtf8(value, position + headerSize);
-				}
-
-				if (length < 0x20) {
-					target[position++] = 0xa0 | length;
-				} else if (length < 0x100) {
-					if (headerSize < 2) {
-						target.copyWithin(position + 2, position + 1, position + 1 + length);
-					}
-					target[position++] = 0xd9;
-					target[position++] = length;
-				} else if (length < 0x10000) {
-					if (headerSize < 3) {
-						target.copyWithin(position + 3, position + 2, position + 2 + length);
-					}
-					target[position++] = 0xda;
-					target[position++] = length >> 8;
-					target[position++] = length & 0xff;
-				} else {
-					if (headerSize < 5) {
-						target.copyWithin(position + 5, position + 3, position + 3 + length);
-					}
-					target[position++] = 0xdb;
-					targetView.setUint32(position, length);
-					position += 4;
-				}
-				position += length;
-			} else if (type === 'number') {
-				if (value >>> 0 === value) {// positive integer, 32-bit or less
-					// positive uint
-					if (value < 0x20 || (value < 0x80 && this.useRecords === false) || (value < 0x40 && !this.randomAccessStructure)) {
-						target[position++] = value;
-					} else if (value < 0x100) {
-						target[position++] = 0xcc;
-						target[position++] = value;
-					} else if (value < 0x10000) {
-						target[position++] = 0xcd;
-						target[position++] = value >> 8;
-						target[position++] = value & 0xff;
-					} else {
-						target[position++] = 0xce;
-						targetView.setUint32(position, value);
-						position += 4;
-					}
-				} else if (value >> 0 === value) { // negative integer
-					if (value >= -32) {
-						target[position++] = 0x100 + value;
-					} else if (value >= -128) {
-						target[position++] = 0xd0;
-						target[position++] = value + 0x100;
-					} else if (value >= -32768) {
-						target[position++] = 0xd1;
-						targetView.setInt16(position, value);
-						position += 2;
-					} else {
-						target[position++] = 0xd2;
-						targetView.setInt32(position, value);
-						position += 4;
-					}
-				} else {
-					let useFloat32;
-					if ((useFloat32 = this.useFloat32) > 0 && value < 0x100000000 && value >= -2147483648) {
-						target[position++] = 0xca;
-						targetView.setFloat32(position, value);
-						let xShifted;
-						if (useFloat32 < 4 ||
-								// this checks for rounding of numbers that were encoded in 32-bit float to nearest significant decimal digit that could be preserved
-								((xShifted = value * mult10[((target[position] & 0x7f) << 1) | (target[position + 1] >> 7)]) >> 0) === xShifted) {
-							position += 4;
-							return
-						} else
-							position--; // move back into position for writing a double
-					}
-					target[position++] = 0xcb;
-					targetView.setFloat64(position, value);
-					position += 8;
-				}
-			} else if (type === 'object' || type === 'function') {
-				if (!value)
-					target[position++] = 0xc0;
-				else {
-					if (referenceMap) {
-						let referee = referenceMap.get(value);
-						if (referee) {
-							if (!referee.id) {
-								let idsToInsert = referenceMap.idsToInsert || (referenceMap.idsToInsert = []);
-								referee.id = idsToInsert.push(referee);
-							}
-							target[position++] = 0xd6; // fixext 4
-							target[position++] = 0x70; // "p" for pointer
-							targetView.setUint32(position, referee.id);
-							position += 4;
-							return
-						} else
-							referenceMap.set(value, { offset: position - start });
-					}
-					let constructor = value.constructor;
-					if (constructor === Object) {
-						writeObject(value);
-					} else if (constructor === Array) {
-						packArray(value);
-					} else if (constructor === Map) {
-						if (this.mapAsEmptyObject) target[position++] = 0x80;
-						else {
-							length = value.size;
-							if (length < 0x10) {
-								target[position++] = 0x80 | length;
-							} else if (length < 0x10000) {
-								target[position++] = 0xde;
-								target[position++] = length >> 8;
-								target[position++] = length & 0xff;
-							} else {
-								target[position++] = 0xdf;
-								targetView.setUint32(position, length);
-								position += 4;
-							}
-							for (let [key, entryValue] of value) {
-								pack(key);
-								pack(entryValue);
-							}
-						}
-					} else {
-						for (let i = 0, l = extensions.length; i < l; i++) {
-							let extensionClass = extensionClasses[i];
-							if (value instanceof extensionClass) {
-								let extension = extensions[i];
-								if (extension.write) {
-									if (extension.type) {
-										target[position++] = 0xd4; // one byte "tag" extension
-										target[position++] = extension.type;
-										target[position++] = 0;
-									}
-									let writeResult = extension.write.call(this, value);
-									if (writeResult === value) { // avoid infinite recursion
-										if (Array.isArray(value)) {
-											packArray(value);
-										} else {
-											writeObject(value);
-										}
-									} else {
-										pack(writeResult);
-									}
-									return
-								}
-								let currentTarget = target;
-								let currentTargetView = targetView;
-								let currentPosition = position;
-								target = null;
-								let result;
-								try {
-									result = extension.pack.call(this, value, (size) => {
-										// restore target and use it
-										target = currentTarget;
-										currentTarget = null;
-										position += size;
-										if (position > safeEnd)
-											makeRoom(position);
-										return {
-											target, targetView, position: position - size
-										}
-									}, pack);
-								} finally {
-									// restore current target information (unless already restored)
-									if (currentTarget) {
-										target = currentTarget;
-										targetView = currentTargetView;
-										position = currentPosition;
-										safeEnd = target.length - 10;
-									}
-								}
-								if (result) {
-									if (result.length + position > safeEnd)
-										makeRoom(result.length + position);
-									position = writeExtensionData(result, target, position, extension.type);
-								}
-								return
-							}
-						}
-						// check isArray after extensions, because extensions can extend Array
-						if (Array.isArray(value)) {
-							packArray(value);
-						} else {
-							// use this as an alternate mechanism for expressing how to serialize
-							if (value.toJSON) {
-								const json = value.toJSON();
-								// if for some reason value.toJSON returns itself it'll loop forever
-								if (json !== value)
-									return pack(json)
-							}
-
-							// if there is a writeFunction, use it, otherwise just encode as undefined
-							if (type === 'function')
-								return pack(this.writeFunction && this.writeFunction(value));
-
-							// no extension found, write as plain object
-							writeObject(value);
-						}
-					}
-				}
-			} else if (type === 'boolean') {
-				target[position++] = value ? 0xc3 : 0xc2;
-			} else if (type === 'bigint') {
-				if (value < (BigInt(1)<<BigInt(63)) && value >= -(BigInt(1)<<BigInt(63))) {
-					// use a signed int as long as it fits
-					target[position++] = 0xd3;
-					targetView.setBigInt64(position, value);
-				} else if (value < (BigInt(1)<<BigInt(64)) && value > 0) {
-					// if we can fit an unsigned int, use that
-					target[position++] = 0xcf;
-					targetView.setBigUint64(position, value);
-				} else {
-					// overflow
-					if (this.largeBigIntToFloat) {
-						target[position++] = 0xcb;
-						targetView.setFloat64(position, Number(value));
-					} else if (this.largeBigIntToString) {
-						return pack(value.toString());
-					} else if (this.useBigIntExtension && value < BigInt(2)**BigInt(1023) && value > -(BigInt(2)**BigInt(1023))) {
-						target[position++] = 0xc7;
-						position++;
-						target[position++] = 0x42; // "B" for BigInt
-						let bytes = [];
-						let alignedSign;
-						do {
-							let byte = value & BigInt(0xff);
-							alignedSign = (byte & BigInt(0x80)) === (value < BigInt(0) ? BigInt(0x80) : BigInt(0));
-							bytes.push(byte);
-							value >>= BigInt(8);
-						} while (!((value === BigInt(0) || value === BigInt(-1)) && alignedSign));
-						target[position-2] = bytes.length;
-						for (let i = bytes.length; i > 0;) {
-							target[position++] = Number(bytes[--i]);
-						}
-						return
-					} else {
-						throw new RangeError(value + ' was too large to fit in MessagePack 64-bit integer format, use' +
-							' useBigIntExtension, or set largeBigIntToFloat to convert to float-64, or set' +
-							' largeBigIntToString to convert to string')
-					}
-				}
-				position += 8;
-			} else if (type === 'undefined') {
-				if (this.encodeUndefinedAsNil)
-					target[position++] = 0xc0;
-				else {
-					target[position++] = 0xd4; // a number of implementations use fixext1 with type 0, data 0 to denote undefined, so we follow suite
-					target[position++] = 0;
-					target[position++] = 0;
-				}
-			} else {
-				throw new Error('Unknown type: ' + type)
-			}
-		};
-
-		const writePlainObject = (this.variableMapSize || this.coercibleKeyAsNumber || this.skipValues) ? (object) => {
-			// this method is slightly slower, but generates "preferred serialization" (optimally small for smaller objects)
-			let keys;
-			if (this.skipValues) {
-				keys = [];
-				for (let key in object) {
-					if ((typeof object.hasOwnProperty !== 'function' || object.hasOwnProperty(key)) &&
-						!this.skipValues.includes(object[key]))
-						keys.push(key);
-				}
-			} else {
-				keys = Object.keys(object);
-			}
-			let length = keys.length;
-			if (length < 0x10) {
-				target[position++] = 0x80 | length;
-			} else if (length < 0x10000) {
-				target[position++] = 0xde;
-				target[position++] = length >> 8;
-				target[position++] = length & 0xff;
-			} else {
-				target[position++] = 0xdf;
-				targetView.setUint32(position, length);
-				position += 4;
-			}
-			let key;
-			if (this.coercibleKeyAsNumber) {
-				for (let i = 0; i < length; i++) {
-					key = keys[i];
-					let num = Number(key);
-					pack(isNaN(num) ? key : num);
-					pack(object[key]);
-				}
-
-			} else {
-				for (let i = 0; i < length; i++) {
-					pack(key = keys[i]);
-					pack(object[key]);
-				}
-			}
-		} :
-		(object) => {
-			target[position++] = 0xde; // always using map 16, so we can preallocate and set the length afterwards
-			let objectOffset = position - start;
-			position += 2;
-			let size = 0;
-			for (let key in object) {
-				if (typeof object.hasOwnProperty !== 'function' || object.hasOwnProperty(key)) {
-					pack(key);
-					pack(object[key]);
-					size++;
-				}
-			}
-			if (size > 0xffff) {
-				throw new Error('Object is too large to serialize with fast 16-bit map size,' +
-				' use the "variableMapSize" option to serialize this object');
-			}
-			target[objectOffset++ + start] = size >> 8;
-			target[objectOffset + start] = size & 0xff;
-		};
-
-		const writeRecord = this.useRecords === false ? writePlainObject :
-		(options.progressiveRecords && !useTwoByteRecords) ?  // this is about 2% faster for highly stable structures, since it only requires one for-in loop (but much more expensive when new structure needs to be written)
-		(object) => {
-			let nextTransition, transition = structures.transitions || (structures.transitions = Object.create(null));
-			let objectOffset = position++ - start;
-			let wroteKeys;
-			for (let key in object) {
-				if (typeof object.hasOwnProperty !== 'function' || object.hasOwnProperty(key)) {
-					nextTransition = transition[key];
-					if (nextTransition)
-						transition = nextTransition;
-					else {
-						// record doesn't exist, create full new record and insert it
-						let keys = Object.keys(object);
-						let lastTransition = transition;
-						transition = structures.transitions;
-						let newTransitions = 0;
-						for (let i = 0, l = keys.length; i < l; i++) {
-							let key = keys[i];
-							nextTransition = transition[key];
-							if (!nextTransition) {
-								nextTransition = transition[key] = Object.create(null);
-								newTransitions++;
-							}
-							transition = nextTransition;
-						}
-						if (objectOffset + start + 1 == position) {
-							// first key, so we don't need to insert, we can just write record directly
-							position--;
-							newRecord(transition, keys, newTransitions);
-						} else // otherwise we need to insert the record, moving existing data after the record
-							insertNewRecord(transition, keys, objectOffset, newTransitions);
-						wroteKeys = true;
-						transition = lastTransition[key];
-					}
-					pack(object[key]);
-				}
-			}
-			if (!wroteKeys) {
-				let recordId = transition[RECORD_SYMBOL];
-				if (recordId)
-					target[objectOffset + start] = recordId;
-				else
-					insertNewRecord(transition, Object.keys(object), objectOffset, 0);
-			}
-		} :
-		(object) => {
-			let nextTransition, transition = structures.transitions || (structures.transitions = Object.create(null));
-			let newTransitions = 0;
-			for (let key in object) if (typeof object.hasOwnProperty !== 'function' || object.hasOwnProperty(key)) {
-				nextTransition = transition[key];
-				if (!nextTransition) {
-					nextTransition = transition[key] = Object.create(null);
-					newTransitions++;
-				}
-				transition = nextTransition;
-			}
-			let recordId = transition[RECORD_SYMBOL];
-			if (recordId) {
-				if (recordId >= 0x60 && useTwoByteRecords) {
-					target[position++] = ((recordId -= 0x60) & 0x1f) + 0x60;
-					target[position++] = recordId >> 5;
-				} else
-					target[position++] = recordId;
-			} else {
-				newRecord(transition, transition.__keys__ || Object.keys(object), newTransitions);
-			}
-			// now write the values
-			for (let key in object)
-				if (typeof object.hasOwnProperty !== 'function' || object.hasOwnProperty(key)) {
-					pack(object[key]);
-				}
-		};
-
-		// create reference to useRecords if useRecords is a function
-		const checkUseRecords = typeof this.useRecords == 'function' && this.useRecords;
-
-		const writeObject = checkUseRecords ? (object) => {
-			checkUseRecords(object) ? writeRecord(object) : writePlainObject(object);
-		} : writeRecord;
-
-		const makeRoom = (end) => {
-			let newSize;
-			if (end > 0x1000000) {
-				// special handling for really large buffers
-				if ((end - start) > MAX_BUFFER_SIZE)
-					throw new Error('Packed buffer would be larger than maximum buffer size')
-				newSize = Math.min(MAX_BUFFER_SIZE,
-					Math.round(Math.max((end - start) * (end > 0x4000000 ? 1.25 : 2), 0x400000) / 0x1000) * 0x1000);
-			} else // faster handling for smaller buffers
-				newSize = ((Math.max((end - start) << 2, target.length - 1) >> 12) + 1) << 12;
-			let newBuffer = new ByteArrayAllocate(newSize);
-			targetView = newBuffer.dataView || (newBuffer.dataView = new DataView(newBuffer.buffer, 0, newSize));
-			end = Math.min(end, target.length);
-			if (target.copy)
-				target.copy(newBuffer, 0, start, end);
-			else
-				newBuffer.set(target.slice(start, end));
-			position -= start;
-			start = 0;
-			safeEnd = newBuffer.length - 10;
-			return target = newBuffer
-		};
-		const newRecord = (transition, keys, newTransitions) => {
-			let recordId = structures.nextId;
-			if (!recordId)
-				recordId = 0x40;
-			if (recordId < sharedLimitId && this.shouldShareStructure && !this.shouldShareStructure(keys)) {
-				recordId = structures.nextOwnId;
-				if (!(recordId < maxStructureId))
-					recordId = sharedLimitId;
-				structures.nextOwnId = recordId + 1;
-			} else {
-				if (recordId >= maxStructureId)// cycle back around
-					recordId = sharedLimitId;
-				structures.nextId = recordId + 1;
-			}
-			let highByte = keys.highByte = recordId >= 0x60 && useTwoByteRecords ? (recordId - 0x60) >> 5 : -1;
-			transition[RECORD_SYMBOL] = recordId;
-			transition.__keys__ = keys;
-			structures[recordId - 0x40] = keys;
-
-			if (recordId < sharedLimitId) {
-				keys.isShared = true;
-				structures.sharedLength = recordId - 0x3f;
-				hasSharedUpdate = true;
-				if (highByte >= 0) {
-					target[position++] = (recordId & 0x1f) + 0x60;
-					target[position++] = highByte;
-				} else {
-					target[position++] = recordId;
-				}
-			} else {
-				if (highByte >= 0) {
-					target[position++] = 0xd5; // fixext 2
-					target[position++] = 0x72; // "r" record defintion extension type
-					target[position++] = (recordId & 0x1f) + 0x60;
-					target[position++] = highByte;
-				} else {
-					target[position++] = 0xd4; // fixext 1
-					target[position++] = 0x72; // "r" record defintion extension type
-					target[position++] = recordId;
-				}
-
-				if (newTransitions)
-					transitionsCount += serializationsSinceTransitionRebuild * newTransitions;
-				// record the removal of the id, we can maintain our shared structure
-				if (recordIdsToRemove.length >= maxOwnStructures)
-					recordIdsToRemove.shift()[RECORD_SYMBOL] = 0; // we are cycling back through, and have to remove old ones
-				recordIdsToRemove.push(transition);
-				pack(keys);
-			}
-		};
-		const insertNewRecord = (transition, keys, insertionOffset, newTransitions) => {
-			let mainTarget = target;
-			let mainPosition = position;
-			let mainSafeEnd = safeEnd;
-			let mainStart = start;
-			target = keysTarget;
-			position = 0;
-			start = 0;
-			if (!target)
-				keysTarget = target = new ByteArrayAllocate(8192);
-			safeEnd = target.length - 10;
-			newRecord(transition, keys, newTransitions);
-			keysTarget = target;
-			let keysPosition = position;
-			target = mainTarget;
-			position = mainPosition;
-			safeEnd = mainSafeEnd;
-			start = mainStart;
-			if (keysPosition > 1) {
-				let newEnd = position + keysPosition - 1;
-				if (newEnd > safeEnd)
-					makeRoom(newEnd);
-				let insertionPosition = insertionOffset + start;
-				target.copyWithin(insertionPosition + keysPosition, insertionPosition + 1, position);
-				target.set(keysTarget.slice(0, keysPosition), insertionPosition);
-				position = newEnd;
-			} else {
-				target[insertionOffset + start] = keysTarget[0];
-			}
-		};
-		const writeStruct = (object) => {
-			let newPosition = writeStructSlots(object, target, start, position, structures, makeRoom, (value, newPosition, notifySharedUpdate) => {
-				if (notifySharedUpdate)
-					return hasSharedUpdate = true;
-				position = newPosition;
-				let startTarget = target;
-				pack(value);
-				resetStructures();
-				if (startTarget !== target) {
-					return { position, targetView, target }; // indicate the buffer was re-allocated
-				}
-				return position;
-			}, this);
-			if (newPosition === 0) // bail and go to a msgpack object
-				return writeObject(object);
-			position = newPosition;
-		};
-	}
-	useBuffer(buffer) {
-		// this means we are finished using our own buffer and we can write over it safely
-		target = buffer;
-		target.dataView || (target.dataView = new DataView(target.buffer, target.byteOffset, target.byteLength));
-		position = 0;
-	}
-	set position (value) {
-		position = value;
-	}
-	get position() {
-		return position;
-	}
-	clearSharedData() {
-		if (this.structures)
-			this.structures = [];
-		if (this.typedStructs)
-			this.typedStructs = [];
-	}
-}
-
-extensionClasses = [ Date, Set, Error, RegExp, ArrayBuffer, Object.getPrototypeOf(Uint8Array.prototype).constructor /*TypedArray*/, C1Type ];
-extensions = [{
-	pack(date, allocateForWrite, pack) {
-		let seconds = date.getTime() / 1000;
-		if ((this.useTimestamp32 || date.getMilliseconds() === 0) && seconds >= 0 && seconds < 0x100000000) {
-			// Timestamp 32
-			let { target, targetView, position} = allocateForWrite(6);
-			target[position++] = 0xd6;
-			target[position++] = 0xff;
-			targetView.setUint32(position, seconds);
-		} else if (seconds > 0 && seconds < 0x100000000) {
-			// Timestamp 64
-			let { target, targetView, position} = allocateForWrite(10);
-			target[position++] = 0xd7;
-			target[position++] = 0xff;
-			targetView.setUint32(position, date.getMilliseconds() * 4000000 + ((seconds / 1000 / 0x100000000) >> 0));
-			targetView.setUint32(position + 4, seconds);
-		} else if (isNaN(seconds)) {
-			if (this.onInvalidDate) {
-				allocateForWrite(0);
-				return pack(this.onInvalidDate())
-			}
-			// Intentionally invalid timestamp
-			let { target, targetView, position} = allocateForWrite(3);
-			target[position++] = 0xd4;
-			target[position++] = 0xff;
-			target[position++] = 0xff;
-		} else {
-			// Timestamp 96
-			let { target, targetView, position} = allocateForWrite(15);
-			target[position++] = 0xc7;
-			target[position++] = 12;
-			target[position++] = 0xff;
-			targetView.setUint32(position, date.getMilliseconds() * 1000000);
-			targetView.setBigInt64(position + 4, BigInt(Math.floor(seconds)));
-		}
-	}
-}, {
-	pack(set, allocateForWrite, pack) {
-		if (this.setAsEmptyObject) {
-			allocateForWrite(0);
-			return pack({})
-		}
-		let array = Array.from(set);
-		let { target, position} = allocateForWrite(this.moreTypes ? 3 : 0);
-		if (this.moreTypes) {
-			target[position++] = 0xd4;
-			target[position++] = 0x73; // 's' for Set
-			target[position++] = 0;
-		}
-		pack(array);
-	}
-}, {
-	pack(error, allocateForWrite, pack) {
-		let { target, position} = allocateForWrite(this.moreTypes ? 3 : 0);
-		if (this.moreTypes) {
-			target[position++] = 0xd4;
-			target[position++] = 0x65; // 'e' for error
-			target[position++] = 0;
-		}
-		pack([ error.name, error.message, error.cause ]);
-	}
-}, {
-	pack(regex, allocateForWrite, pack) {
-		let { target, position} = allocateForWrite(this.moreTypes ? 3 : 0);
-		if (this.moreTypes) {
-			target[position++] = 0xd4;
-			target[position++] = 0x78; // 'x' for regeXp
-			target[position++] = 0;
-		}
-		pack([ regex.source, regex.flags ]);
-	}
-}, {
-	pack(arrayBuffer, allocateForWrite) {
-		if (this.moreTypes)
-			writeExtBuffer(arrayBuffer, 0x10, allocateForWrite);
-		else
-			writeBuffer(hasNodeBuffer ? Buffer.from(arrayBuffer) : new Uint8Array(arrayBuffer), allocateForWrite);
-	}
-}, {
-	pack(typedArray, allocateForWrite) {
-		let constructor = typedArray.constructor;
-		if (constructor !== ByteArray && this.moreTypes)
-			writeExtBuffer(typedArray, typedArrays.indexOf(constructor.name), allocateForWrite);
-		else
-			writeBuffer(typedArray, allocateForWrite);
-	}
-}, {
-	pack(c1, allocateForWrite) { // specific 0xC1 object
-		let { target, position} = allocateForWrite(1);
-		target[position] = 0xc1;
-	}
-}];
-
-function writeExtBuffer(typedArray, type, allocateForWrite, encode) {
-	let length = typedArray.byteLength;
-	if (length + 1 < 0x100) {
-		var { target, position } = allocateForWrite(4 + length);
-		target[position++] = 0xc7;
-		target[position++] = length + 1;
-	} else if (length + 1 < 0x10000) {
-		var { target, position } = allocateForWrite(5 + length);
-		target[position++] = 0xc8;
-		target[position++] = (length + 1) >> 8;
-		target[position++] = (length + 1) & 0xff;
-	} else {
-		var { target, position, targetView } = allocateForWrite(7 + length);
-		target[position++] = 0xc9;
-		targetView.setUint32(position, length + 1); // plus one for the type byte
-		position += 4;
-	}
-	target[position++] = 0x74; // "t" for typed array
-	target[position++] = type;
-	if (!typedArray.buffer) typedArray = new Uint8Array(typedArray);
-	target.set(new Uint8Array(typedArray.buffer, typedArray.byteOffset, typedArray.byteLength), position);
-}
-function writeBuffer(buffer, allocateForWrite) {
-	let length = buffer.byteLength;
-	var target, position;
-	if (length < 0x100) {
-		var { target, position } = allocateForWrite(length + 2);
-		target[position++] = 0xc4;
-		target[position++] = length;
-	} else if (length < 0x10000) {
-		var { target, position } = allocateForWrite(length + 3);
-		target[position++] = 0xc5;
-		target[position++] = length >> 8;
-		target[position++] = length & 0xff;
-	} else {
-		var { target, position, targetView } = allocateForWrite(length + 5);
-		target[position++] = 0xc6;
-		targetView.setUint32(position, length);
-		position += 4;
-	}
-	target.set(buffer, position);
-}
-
-function writeExtensionData(result, target, position, type) {
-	let length = result.length;
-	switch (length) {
-		case 1:
-			target[position++] = 0xd4;
-			break
-		case 2:
-			target[position++] = 0xd5;
-			break
-		case 4:
-			target[position++] = 0xd6;
-			break
-		case 8:
-			target[position++] = 0xd7;
-			break
-		case 16:
-			target[position++] = 0xd8;
-			break
-		default:
-			if (length < 0x100) {
-				target[position++] = 0xc7;
-				target[position++] = length;
-			} else if (length < 0x10000) {
-				target[position++] = 0xc8;
-				target[position++] = length >> 8;
-				target[position++] = length & 0xff;
-			} else {
-				target[position++] = 0xc9;
-				target[position++] = length >> 24;
-				target[position++] = (length >> 16) & 0xff;
-				target[position++] = (length >> 8) & 0xff;
-				target[position++] = length & 0xff;
-			}
-	}
-	target[position++] = type;
-	target.set(result, position);
-	position += length;
-	return position
-}
-
-function insertIds(serialized, idsToInsert) {
-	// insert the ids that need to be referenced for structured clones
-	let nextId;
-	let distanceToMove = idsToInsert.length * 6;
-	let lastEnd = serialized.length - distanceToMove;
-	while (nextId = idsToInsert.pop()) {
-		let offset = nextId.offset;
-		let id = nextId.id;
-		serialized.copyWithin(offset + distanceToMove, offset, lastEnd);
-		distanceToMove -= 6;
-		let position = offset + distanceToMove;
-		serialized[position++] = 0xd6;
-		serialized[position++] = 0x69; // 'i'
-		serialized[position++] = id >> 24;
-		serialized[position++] = (id >> 16) & 0xff;
-		serialized[position++] = (id >> 8) & 0xff;
-		serialized[position++] = id & 0xff;
-		lastEnd = offset;
-	}
-	return serialized
-}
-
-function writeBundles(start, pack, incrementPosition) {
-	if (bundledStrings.length > 0) {
-		targetView.setUint32(bundledStrings.position + start, position + incrementPosition - bundledStrings.position - start);
-		bundledStrings.stringsPosition = position - start;
-		let writeStrings = bundledStrings;
-		bundledStrings = null;
-		pack(writeStrings[0]);
-		pack(writeStrings[1]);
-	}
-}
-function prepareStructures(structures, packr) {
-	structures.isCompatible = (existingStructures) => {
-		let compatible = !existingStructures || ((packr.lastNamedStructuresLength || 0) === existingStructures.length);
-		if (!compatible) // we want to merge these existing structures immediately since we already have it and we are in the right transaction
-			packr._mergeStructures(existingStructures);
-		return compatible;
-	};
-	return structures
-}
-
-let defaultPackr = new Packr({ useRecords: false });
-defaultPackr.pack;
-defaultPackr.pack;
-const REUSE_BUFFER_MODE = 512;
-const RESET_BUFFER_MODE = 1024;
-const RESERVE_START_SPACE = 2048;
-
-const msgPackToObject = (bytes) => {
-    const packr = new Packr({ structuredClone: true });
-    return packr.unpack(new Uint8Array(bytes));
-};
-
-function toBase64(bytes) {
-    if (isImmediateByteLike(bytes)) {
-        return immediateToBase64(bytes);
-    }
-    return eventualToBase64(bytes);
-}
-async function eventualToBase64(bytes) {
-    const ab = await toArrayBuffer(bytes);
-    return arrayBufferToBase64(ab);
-}
-function immediateToBase64(bytes) {
-    const ab = immediateToArrayBuffer(bytes);
-    return arrayBufferToBase64(ab);
-}
-
-const toBlob = (bytes, mediaType = "application/octet-stream") => {
-    if (bytes instanceof Blob) {
-        return bytes;
-    }
-    if (bytes instanceof ArrayBuffer) {
-        return new Blob([bytes], { type: mediaType });
-    }
-    if (typeof bytes === "string") {
-        return new Blob([bytes], { type: mediaType });
-    }
-    if (ArrayBuffer.isView(bytes)) {
-        return new Blob([bytes], { type: mediaType });
-    }
-    if (Array.isArray(bytes)) {
-        return new Blob([arrayToFloat64Array(bytes)], { type: mediaType });
-    }
-    return new Blob([]);
-};
-
-const toDataUrl = async (bytes) => {
-    const blob = toBlob(bytes);
-    const reader = new FileReader();
-    return new Promise((resolve, reject) => {
-        const callback = (result) => {
-            if (typeof result === "string") {
-                return resolve(result);
-            }
-            console.log({ bytes });
-            return reject("Unable to convert to data URL");
-        };
-        reader.onload = function (e) {
-            callback(e.target?.result);
-        };
-        reader.readAsDataURL(blob);
-    });
-};
-
-const toMsgPack = (obj) => {
-    const packr = new Packr({ structuredClone: true });
-    return new Uint8Array(packr.encode(obj));
-};
-
-const typeOfBytes = (bytes) => {
-    if (bytes instanceof Blob) {
-        return "Blob";
-    }
-    if (bytes instanceof ArrayBuffer) {
-        return "ArrayBuffer";
-    }
-    if (typeof bytes === "string") {
-        return "string";
-    }
-    if (ArrayBuffer.isView(bytes)) {
-        return "ArrayBufferView";
-    }
-    if (Array.isArray(bytes)) {
-        return "Array";
-    }
-};
-
-const utf8ToUint8Array = (input) => new TextEncoder().encode(input);
-
-const Bytes = {
-    toMsgPack,
-    msgPackToObject,
-    typeOfBytes,
-    toDataUrl,
-    dataUrlToBlob,
-    lengthOf,
-    isByteLike,
-    isImmediateByteLike,
-    hashOf,
-    immediateHashOf,
-    addressStringOf,
-    toArrayBuffer,
-    immediateToArrayBuffer,
-    toBlob,
-    toText,
-    toBase64,
-    encodeAsString,
-    test,
-    assignMediaTypeToBlob,
-    utf8ToUint8Array,
-    base64ToArrayBuffer,
-    arrayBufferToHex,
-    arrayBufferToUtf8,
-    arrayBufferToBase64,
-    ALL_ALGORITHMS,
-    ALGORITHM_BYTE_LENGTHS,
-};
-
-const connectListenerToSubscription = async ({ connection, subject, listener, options = {}, env = {}, }) => {
-    const { log = () => { } } = options;
-    log("connectListenerToSubscription: subject: ", subject);
-    const subscription = connection.subscribe(subject);
     for await (const message of subscription) {
         try {
-            const detail = Bytes.msgPackToObject(message.data);
+            const valueOrError = Bytes.msgPackToObject(message.data);
             const requestHeaders = natsHeadersToRecord(message.headers);
             const abortController = new AbortController();
             if (isDefined(requestHeaders?.["abort-subject"])) {
@@ -15251,7 +14677,6 @@ const connectListenerToSubscription = async ({ connection, subject, listener, op
                 const abortSubscription = connection.subscribe(abortSubject, {
                     max: 1,
                     callback: () => {
-                        console.log("aborting!!!!");
                         abortController.abort();
                         abortSubscription.unsubscribe();
                         message.respond(); // Acknowledge the abort
@@ -15269,33 +14694,27 @@ const connectListenerToSubscription = async ({ connection, subject, listener, op
                     connection.publish(message.reply);
                     return;
                 }
-                const responseMsg = Bytes.toMsgPack(response);
+                const responseMsg = Bytes.toMsgPack({
+                    value: response,
+                });
                 message.respond(responseMsg, {
                     headers: responseHeaders,
                 });
             };
-            const sendError = async (error, options = {}) => {
-                const errorDetail = await errorToErrorDetail({
-                    error,
-                    extra: [message.subject],
-                });
-                const responseHeaders = headers(options.code ?? 500, options.codeDescription ?? "Error");
-                if (isDefined(options.headers)) {
-                    for (const [key, value] of Object.entries(options.headers)) {
-                        responseHeaders.set(key, value);
-                    }
-                }
-                message.respond(Bytes.toMsgPack(errorDetail), {
-                    headers: responseHeaders,
-                });
-            };
+            const sendError = async (error, options = {}) => sendMessageError(message)(error, options);
+            const unsubscribe = (maxMessages) => subscription.unsubscribe(maxMessages);
+            if (isDefined(valueOrError.error)) {
+                log("Error: connectListenerToSubscription: valueOrError.error", valueOrError.error);
+                continue;
+            }
             const result = await listener({
-                detail,
+                detail: valueOrError.value,
                 headers: requestHeaders,
                 env,
                 signal: abortController.signal,
                 send,
                 sendError,
+                unsubscribe,
             });
             const reply = message.reply;
             if (isUndefined(reply)) {
@@ -15304,17 +14723,40 @@ const connectListenerToSubscription = async ({ connection, subject, listener, op
             send(result);
         }
         catch (error) {
-            log("connectListenerToSubscription: error", error);
             const errorDetail = await errorToErrorDetail({
                 error,
                 extra: [message.subject],
             });
-            const hs = headers(500, "Listener Error");
-            message.respond(Bytes.toMsgPack(errorDetail), {
-                headers: hs,
-            });
+            log(errorDetail);
+            sendMessageError(message)(error);
         }
     }
+};
+
+const msgToResponseData = async ({ msg, subject, request, log, }) => {
+    const responseData = Bytes.msgPackToObject(new Uint8Array(msg.data));
+    if (msg.headers?.hasError) {
+        log("Error: msgToResponseData: msg.headers.hasError", {
+            headers: msg.headers,
+            responseData,
+        });
+        throw new Error(`Message Error on subject: ${subject}`, {
+            cause: await errorToErrorDetail({
+                error: responseData,
+                extra: [request],
+            }),
+        });
+    }
+    if (isDefined(responseData.error)) {
+        log("Error: msgToResponseData: responseData.error", responseData.error);
+        throw new Error(`Error on subject: ${subject}`, {
+            cause: await errorToErrorDetail({
+                error: responseData.error,
+                extra: [request],
+            }),
+        });
+    }
+    return responseData.value;
 };
 
 const recordToNatsHeaders = (record) => {
@@ -15344,7 +14786,7 @@ const createConnection = async ({ server, creds, token, subscribers = {}, option
         if (isUndefined(listener)) {
             continue;
         }
-        connectListenerToSubscription({
+        connectConnectionListenerToSubject({
             connection,
             subject,
             listener,
@@ -15353,16 +14795,10 @@ const createConnection = async ({ server, creds, token, subscribers = {}, option
         });
     }
     return {
-        connection: {
-            close: () => connection.close(),
-            drain: () => connection.drain(),
-            flush: () => connection.flush(),
-            stats: () => connection.stats(),
-            status: () => connection.status(),
-        },
+        connection,
         requestMany: async (props) => {
             const { request, subject, headers, options = {}, onResponse, signal, } = props;
-            const requestMsg = Bytes.toMsgPack(request);
+            const requestMsg = Bytes.toMsgPack({ value: request });
             const { timeoutMs = 60 * 1000 } = options;
             const hs = recordToNatsHeaders(headers);
             if (isDefined(signal)) {
@@ -15384,731 +14820,66 @@ const createConnection = async ({ server, creds, token, subscribers = {}, option
                 if (isUndefined(resp.data) || resp.data.byteLength === 0) {
                     break;
                 }
-                const responseData = Bytes.msgPackToObject(new Uint8Array(resp.data));
-                if (resp.headers?.hasError) {
-                    throw new Error(`Error response on subject: ${subject}`, {
-                        cause: responseData,
-                    });
-                }
+                const responseData = await msgToResponseData({
+                    msg: resp,
+                    subject,
+                    request,
+                    log,
+                });
                 await onResponse(responseData);
             }
         },
         request: async (props) => {
             const { request, subject, headers, options = {} } = props;
-            const requestMsg = Bytes.toMsgPack(request);
+            const requestMsg = Bytes.toMsgPack({ value: request });
             const { timeoutMs = 60 * 1000 } = options;
             const hs = recordToNatsHeaders(headers);
             const resp = await connection.request(subject, requestMsg, {
                 timeout: timeoutMs,
                 headers: hs,
             });
-            const responseData = Bytes.msgPackToObject(resp.data);
-            if (resp.headers?.hasError) {
-                throw new Error(`Error response on subject: ${subject}`, {
-                    cause: responseData,
-                });
+            if (isUndefined(resp.data) || resp.data.byteLength === 0) {
+                return undefined;
             }
-            return responseData;
+            return msgToResponseData({ msg: resp, subject, request, log });
         },
-    };
-};
-
-const Messages = { createConnection, connectListenerToSubscription };
-
-const logDebug = (...args) => {
-    console.log(...args);
-};
-
-const CHAT_ML_TEMPLATE = {
-    messageStart: "<|im_start|>",
-    afterRole: "\n",
-    messageEnd: "<|im_end|>",
-};
-const LLAMA3_TEMPLATE = {
-    bos: "<|begin_of_text|>",
-    messageStart: "<|start_header_id|>",
-    afterRole: "<|end_header_id|>\n",
-    messageEnd: "<|eot_id|>",
-};
-const OPENCHAT_TEMPLATE = {
-    messageStart: "GPT4 Correct ",
-    afterRole: ": ",
-    messageEnd: "<|end_of_turn|>",
-};
-const CHAT_GLM3_TEMPlATE = {
-    messageStart: "<|",
-    afterRole: "|>",
-    messageEnd: "",
-};
-const DEFAULT_CHAT_MESSAGE_TEMPLATE = CHAT_ML_TEMPLATE;
-const TEXTGEN_CHAT_TEMPLATES = {
-    chatML: CHAT_ML_TEMPLATE,
-    llama3: LLAMA3_TEMPLATE,
-    glm3: CHAT_GLM3_TEMPlATE,
-    openchat: OPENCHAT_TEMPLATE,
-};
-
-const DEFAULT_STOP = [
-    "<|eot_id|>",
-    "<|end_of_text|>",
-    "<|im_start>",
-    "<|im_end|>",
-    "<|end_of_turn|>",
-    "<s>",
-    "</s>",
-    "[INST]",
-    "[/INST]",
-    "<|/s|>",
-    "<|s|>",
-    "<|",
-    DEFAULT_CHAT_MESSAGE_TEMPLATE.messageStart,
-    DEFAULT_CHAT_MESSAGE_TEMPLATE.messageEnd,
-];
-
-// @see https://openrouter.ai/docs#responses
-const isOpenrouterStreamingChoice = (maybe) => {
-    const straw = maybe;
-    return typeof straw === "object" && typeof straw.delta?.content === "string";
-};
-
-const isOobaboogaChoice = (maybe) => {
-    const straw = maybe;
-    return typeof straw === "object" && typeof straw.text === "string";
-};
-
-const chatMessagesToPromptText = ({ messages, messageTemplate, }) => {
-    const { messageStart, afterRole, messageEnd } = messageTemplate;
-    const assistantName = messages.find((m) => m.role === "assistant")?.name;
-    const ephemeralLast = last(messages)?.role === "assistant"
-        ? undefined
-        : { role: "assistant", content: "", name: assistantName };
-    const updatedMessages = [...messages, ephemeralLast].filter(isDefined);
-    const promptTexts = updatedMessages
-        .map((message, i) => {
-        const author = message.name ?? message.role;
-        const rawText = message.content;
-        const renderedText = rawText;
-        if (i === updatedMessages.length - 1) {
-            return {
-                role: message.role,
-                text: `${messageStart}${author}${afterRole}${renderedText}`,
-            };
-        }
-        return {
-            role: message.role,
-            text: `${messageStart}${author}${afterRole}${renderedText}${messageEnd}`,
-        };
-    })
-        .filter(isDefined);
-    return `${messageTemplate.bos ?? ""}${promptTexts
-        .map((p) => p.text)
-        .join("")}`;
-};
-
-const Textgens = {
-    chatMessagesToPromptText,
-};
-
-const toTextgenExtendedBody = (request) => {
-    console.log("toTextgenExtendedBody: request", request);
-    const { body, options = {} } = request;
-    const { promptStyle = "message", templateType = "chatML", stop } = options;
-    const extendedBody = {
-        max_tokens: 256,
-        prompt: promptStyle === "raw"
-            ? Textgens.chatMessagesToPromptText({
-                messages: body.messages ?? [],
-                messageTemplate: TEXTGEN_CHAT_TEMPLATES[templateType],
-            })
-            : undefined,
-        ...body,
-        messages: promptStyle === "raw" ? undefined : body.messages,
-        stop,
-    };
-    return extendedBody;
-};
-
-const toLocalTextgenFetchParams = ({ request, headers = {}, env, }) => {
-    const { options } = request;
-    const { authToken = env.LOCAL_AUTH_TOKEN, url = options?.promptStyle === "raw"
-        ? "http://10.0.0.9:5000/v1/completions"
-        : "http://10.0.0.9:5000/v1/chat/completions", } = headers;
-    return {
-        url,
-        body: toTextgenExtendedBody(request),
-        authToken,
-    };
-};
-
-const toOpenRouterTextgenFetchParams = ({ request, headers = {}, env, }) => {
-    console.log("toOpenRouterTextgenFetchParams: env", env);
-    const { authToken = env.OPEN_ROUTER_AUTH_TOKEN, url = "https://openrouter.ai/api/v1/chat/completions", } = headers;
-    return {
-        url,
-        body: toTextgenExtendedBody(request),
-        authToken,
-    };
-};
-
-const toTextgenFetchParams = ({ request, headers, env, }) => {
-    const { options = {} } = request;
-    const { provider = "openrouter" } = options;
-    switch (provider) {
-        case "local": {
-            return toLocalTextgenFetchParams({ request, headers, env });
-        }
-        case "openrouter": {
-            return toOpenRouterTextgenFetchParams({ request, headers, env });
-        }
-    }
-    throw new Error(`unknown provider: ${provider}`);
-};
-
-/**
- * TextEncoderStream polyfill based on Node.js' implementation https://github.com/nodejs/node/blob/3f3226c8e363a5f06c1e6a37abd59b6b8c1923f1/lib/internal/webstreams/encoding.js#L38-L119 (MIT License)
- */
-/**
- * TextDecoderStream polyfill based on Node.js' implementation https://github.com/nodejs/node/blob/3f3226c8e363a5f06c1e6a37abd59b6b8c1923f1/lib/internal/webstreams/encoding.js#L121-L200 (MIT License)
- */
-class TextDecoderStream {
-    #handle;
-    #transform = new TransformStream({
-        transform: (chunk, controller) => {
-            const value = this.#handle.decode(chunk, { stream: true });
-            if (value) {
-                controller.enqueue(value);
-            }
-        },
-        flush: (controller) => {
-            const value = this.#handle.decode();
-            if (value) {
-                controller.enqueue(value);
-            }
-            controller.terminate();
-        },
-    });
-    constructor(encoding = "utf-8", options = {}) {
-        this.#handle = new TextDecoder(encoding, options);
-    }
-    get encoding() {
-        return this.#handle.encoding;
-    }
-    get fatal() {
-        return this.#handle.fatal;
-    }
-    get ignoreBOM() {
-        return this.#handle.ignoreBOM;
-    }
-    get readable() {
-        return this.#transform.readable;
-    }
-    get writable() {
-        return this.#transform.writable;
-    }
-    get [Symbol.toStringTag]() {
-        return "TextDecoderStream";
-    }
-}
-
-/** @see https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events */
-const decodeSseValue = (value) => {
-    const fields = [":", "event:", "data:", "id:", "retry:"];
-    if (!value) {
-        return [];
-    }
-    const regex = new RegExp(`(${fields.map((f) => `^${f}`).join("|")})(.*$)`, "igm");
-    const matches = Array.from(value.trim().matchAll(regex));
-    return matches
-        .map((match) => {
-        return safe(() => ({
-            field: match[1].replace(":", ""),
-            value: match[2]?.trim(),
-        }));
-    })
-        .filter(isDefined);
-};
-
-const detectSimpleStop = (text, stops) => {
-    if (!text) {
-        return [undefined, false, 0];
-    }
-    for (const stop of stops) {
-        const indexMaybe = text.indexOf(stop);
-        if (indexMaybe > -1) {
-            const sliced = text.slice(0, indexMaybe);
-            return [sliced, true, stop.length];
-        }
-    }
-    return [text, false, 0];
-};
-
-const processSsePartial = async ({ input, dataParser = (data) => data, consumer, reader, done, }) => {
-    const [stopFragment, stopped, stopLength] = detectSimpleStop(input, [
-        "\n\n",
-        "\n",
-    ]);
-    if (!stopped) {
-        if (!stopFragment) {
-            console.log("error", [input, stopFragment, stopped]);
-            throw new Error("unexpected undefined stopFragment");
-        }
-        return stopFragment;
-    }
-    const decodes = decodeSseValue(stopFragment);
-    if (decodes) {
-        for (const decoded of decodes) {
-            if (isDefined(decoded) && decoded.field === "data") {
-                const chunk = safe(() => dataParser(decoded.value), {
-                    onError: `${decoded.value}`,
-                });
-                if (isDefined(chunk)) {
-                    const consumerResp = await consumer(chunk, done);
-                    if (consumerResp) {
-                        reader.cancel();
-                    }
-                }
-            }
-        }
-    }
-    return stopFragment ? input.slice(stopFragment.length + stopLength) : input;
-};
-
-const processSsePartialUntilNoMoreStops = async (params) => {
-    const rest = await processSsePartial(params);
-    if (rest.length === 0 || rest === params.input) {
-        return rest;
-    }
-    return processSsePartialUntilNoMoreStops({
-        ...params,
-        input: rest,
-    });
-};
-
-const createSseParser = ({ consumer, reader, onDone = () => { }, onError = () => { }, dataParser = (data) => data, signal, }) => {
-    return new Promise(async (resolve, reject) => {
-        let finished = false;
-        try {
-            let partial = "";
-            while (!signal?.aborted && !finished) {
-                const { value: readValue = "", done } = await reader.read();
-                if (!readValue && !done) {
-                    continue;
-                }
-                if (done) {
-                    if (partial.length > 0) {
-                        const foo = await processSsePartialUntilNoMoreStops({
-                            input: partial + readValue,
-                            consumer,
-                            done,
-                            reader,
-                            dataParser,
-                        });
-                    }
-                    await consumer(undefined, done);
-                    onDone();
-                    reader.cancel();
-                    finished = true;
-                    break;
-                }
-                partial = await processSsePartialUntilNoMoreStops({
-                    input: partial + readValue,
-                    consumer,
-                    done,
-                    reader,
-                    dataParser,
-                });
-            }
-        }
-        catch (error) {
-            onError(error);
-            reject(error);
-        }
-        finally {
-            reader.cancel();
-            if (!finished) {
-                onDone(); // make sure onDone is always called
-            }
-            consumer(undefined, true);
-            resolve();
-        }
-    });
-};
-
-/**
- * remove any stopword references as well as any _potential_ stopword references
- */
-const stopWordToCleanText = ({ text, stopWord, }) => {
-    // the text could potentially have several partial matches.
-    const { pre, mid, post } = stopWord;
-    // if there is a post but does not match further, then give up
-    const postMatch = text.match(new RegExp(`${post}`));
-    if (postMatch) {
-        const preMidPostMatch = text.match(new RegExp(`${pre}${mid}${post}`));
-        if (preMidPostMatch && isDefined(preMidPostMatch.index)) {
-            return [text.slice(0, preMidPostMatch.index), true];
-        }
-        return [text, false];
-    }
-    // we are potentially in the middle of a match
-    // grab as much as we can to check later
-    const preMidMatch = text.match(new RegExp(`${pre}${mid}`));
-    if (preMidMatch && isDefined(preMidMatch.index)) {
-        return [text.slice(0, preMidMatch.index), false];
-    }
-    // since single char matching need to be able to check first chars directly
-    // possible that the mid regex might require stuff that just isn't possible yet
-    const preMatch = text.match(new RegExp(`${pre}`));
-    if (preMatch && isDefined(preMatch.index)) {
-        return [text.slice(0, preMatch.index), false];
-    }
-    return [text, false];
-};
-const stopWordsToCleanText = ({ text, stopWords, onConsume = () => { }, }) => {
-    let cleanResult = text;
-    for (const stopWord of stopWords) {
-        const [cleaned, consumed] = stopWordToCleanText({
-            text: cleanResult,
-            stopWord: stopWord,
-        });
-        if (consumed) {
-            onConsume(text, stopWord);
-            return [cleaned, consumed];
-        }
-        cleanResult = cleaned;
-    }
-    return [cleanResult, false];
-};
-const createStreamParser = ({ onConsume, stopWords = [], }) => {
-    let buffer = "";
-    const transformStream = new TransformStream({
-        transform: (chunk, controller) => {
-            if (!chunk || chunk.length === 0) {
-                return;
-            }
-            buffer = `${buffer}${chunk}`;
-            const [cleaned, consumed] = stopWordsToCleanText({
-                text: buffer,
-                stopWords,
-                onConsume,
+        publish: async (props) => {
+            const { payload, subject, headers } = props;
+            const msg = Bytes.toMsgPack({ value: payload });
+            const hs = recordToNatsHeaders(headers);
+            return connection.publish(subject, msg, {
+                headers: hs,
             });
-            buffer = consumed ? "" : buffer.slice(cleaned.length);
-            if (cleaned.length > 0) {
-                controller.enqueue(cleaned);
-            }
         },
-        start: (controller) => { },
-        flush: (controller) => {
-            controller.terminate();
-        },
-    });
-    const reader = transformStream.readable.getReader();
-    const writer = transformStream.writable.getWriter();
+    };
+};
+
+const parseSubject = (subject) => {
+    const segments = subject.split(".");
+    const root = segments.shift();
+    const subpath = segments.join(".");
     return {
-        reader,
-        write: (text) => {
-            text.split("").forEach((c) => writer.write(c));
-        },
-        close: () => {
-            writer.close();
-        },
+        root,
+        segments,
+        subpath,
     };
 };
 
-function escapeRegExp(str) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // $& means the whole matched string
-}
-
-const detectStop = (text, stopArrayOrString = []) => {
-    if (!text) {
-        return [undefined, false];
-    }
-    const stop = Array.isArray(stopArrayOrString)
-        ? stopArrayOrString
-        : [stopArrayOrString];
-    if (stop.length === 0) {
-        console.warn("NO STOPS!");
-        return [text, false];
-    }
-    const escapedStops = stop.map(escapeRegExp);
-    const regex = new RegExp(`(.*?)(${escapedStops.join("|")})`, "ms");
-    const match = text.match(regex);
-    if (match && match.length === 3) {
-        return [match[1], true];
-    }
-    return [text, false];
-};
-
-const detectStopAfter = (text, stopArrayOrString = []) => {
-    if (!text) {
-        return [undefined, false];
-    }
-    const stop = Array.isArray(stopArrayOrString)
-        ? stopArrayOrString
-        : [stopArrayOrString];
-    if (stop.length === 0) {
-        return [text, false];
-    }
-    const escapedStops = stop.map(escapeRegExp);
-    const regex = new RegExp(`(.*?)(${escapedStops.join("|")})`, "ms");
-    const match = text.match(regex);
-    if (match && match.length === 3) {
-        return [match[1] + match[2], true];
-    }
-    return [text, false];
-};
-
-const Parsers = {
-    createSseParser,
-    createStreamParser,
-    detectStop,
-    detectSimpleStop,
-    detectStopAfter,
-    escapeRegExp,
-};
-
-const createConsumer = ({ buffer, finishedConsumingAbortController, send, stop = DEFAULT_STOP, stopAfter = [], }) => async (value, done) => {
-    // logDebug("consuming", { value, done });
-    try {
-        if (isOpenrouterStreamingChoice(value)) {
-            if (isDefined(value.finish_reason)) {
-                logDebug(`finish_reason: '${value.finish_reason}'`);
-            }
-        }
-        const choice = value?.choices?.[0];
-        const delta = isOpenrouterStreamingChoice(choice)
-            ? choice.delta.content
-            : isOobaboogaChoice(choice)
-                ? choice.text
-                : undefined;
-        buffer.push(delta ?? "");
-        const bufferText = buffer.join("");
-        const [fullStoppedTextFragment, fullStopped] = Parsers.detectStop(bufferText, stop);
-        const [stopAfterTextFragment, stopAfterStopped] = Parsers.detectStopAfter(fullStoppedTextFragment, stopAfter);
-        if (fullStopped || stopAfterStopped) {
-            finishedConsumingAbortController.abort();
-            send({
-                delta: delta ?? undefined,
-                text: stopAfterTextFragment,
-                done: true,
-            });
-            return true;
-        }
-        if (isDefined(fullStoppedTextFragment)) {
-            send({
-                delta: delta ?? undefined,
-                text: fullStoppedTextFragment,
-                done,
-            });
-        }
-        if (done) {
-            return true;
-        }
-    }
-    catch (err) {
-        console.error(err);
-        return true;
-    }
-};
-
-const dataParser = (data) => {
-    logDebug("data", data);
-    // if (signal?.aborted) {
-    //   return undefined;
-    // }
-    if (!data || data === "[DONE]") {
-        return undefined;
-    }
-    return safe(() => JSON.parse(data), { quiet: true });
-};
-
-const sendTextgenStreamingResponse = async ({ signal, detail, headers, send, sendError, env }) => {
-    const stream = new TextDecoderStream();
-    const buffer = [];
-    const finishedConsumingAbortController = new AbortController();
-    const finishedConsumingSignal = finishedConsumingAbortController.signal;
-    const onAbort = () => {
-        finishedConsumingAbortController.abort();
-    };
-    signal.addEventListener("abort", onAbort);
-    finishedConsumingSignal.addEventListener("abort", () => {
-        console.log("finishedConsumingSignal aborted");
-    });
-    const { authToken, body, url } = toTextgenFetchParams({
-        request: detail,
-        headers,
-        env,
-    });
-    logDebug("message.detail", {
-        url,
-        body,
-        authToken,
-    });
-    const response = await fetch(url, {
-        method: "POST",
-        // signal,
-        signal: finishedConsumingSignal,
-        headers: {
-            Authorization: `Bearer ${authToken} `,
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-    })
-        .catch((error) => {
-        console.log(error);
-        sendError(error);
-        return undefined;
-    })
-        .finally(() => {
-        if (signal) {
-            signal.removeEventListener("abort", onAbort);
-        }
-    });
-    if (!response || !response.ok || !response.body) {
-        throw new Error(`Bad response: ${response?.status}`, { cause: response });
-    }
-    const pipe = response.body.pipeThrough(stream);
-    const reader = pipe.getReader();
-    const { stop = [], stopAfter = [] } = detail.options ?? {};
-    await Parsers.createSseParser({
-        signal,
-        consumer: createConsumer({
-            buffer,
-            finishedConsumingAbortController,
-            send,
-            stop: [...DEFAULT_STOP, ...stop],
-            stopAfter,
-        }),
-        reader,
-        onError: async (error) => {
-            sendError(error);
-        },
-        onDone: () => { },
-        dataParser,
-    });
-    // send sentinel message to indicate that the stream is done
-    send();
+const Messages = {
+    createConnection,
+    connectEventListenerToSubjectRoot,
+    parseSubject,
 };
 
 const textgenGenerateListener = async (props) => {
-    // Add your code logic here
-    try {
-        const { stream } = props.detail.body;
-        if (stream) {
-            return sendTextgenStreamingResponse(props);
-        }
-        // return sendTextgenNonStreamingResponse(props);
-        return { done: true };
-    }
-    catch (error) {
-        console.log("textgenGenerateListener error", error);
-    }
-};
-
-function toMessage(message) {
-    if (typeof message === "string") {
-        return message;
-    }
-    const messageMaybe = message();
-    if (typeof messageMaybe === "string") {
-        return messageMaybe;
-    }
-    console.error("ASSERTION FAIL VALUE", messageMaybe);
-    return "Assertion Failed";
-}
-
-function assert$1(value, message = "Assertion failed") {
-    if (!value) {
-        throw new Error(toMessage(message));
-    }
-}
-
-const assertEqualElements = (a, b, message = () => {
-    console.error(a, b);
-    return `Assertion failed: ${JSON.stringify(a)} is not equal to ${JSON.stringify(b)}`;
-}) => {
-    throw new Error("assertEqualElements: Bitrotted");
-    // if (a === b) {
-    //   return true;
+    console.log("textgenGenerateListener", props);
+    // const { stream } = props.detail.body;
+    // if (stream) {
+    //   return sendTextgenStreamingResponse(props);
     // }
-    // if (!a || !b) {
-    //   return false;
-    // }
-    // const [aLength, bLength] = [lengthOf(a), lengthOf(b)];
-    // assertEqual(
-    //   aLength,
-    //   bLength,
-    //   message ||
-    //     `Assertion failed: array length ${aLength} not equal to ${bLength}`
-    // );
-    // for (let i = 0; i < aLength; i++) {
-    //   const aElement = a[i];
-    //   const bElement = b[i];
-    //   if (Array.isArray(aElement) && Array.isArray(bElement)) {
-    //     assertEqualElements(aElement, bElement, message);
-    //   } else {
-    //     assertEqual(
-    //       toStableValue(aElement),
-    //       toStableValue(bElement),
-    //       message ||
-    //         `Assertion failed: at index: a[${i}]=>${JSON.stringify(
-    //           aElement
-    //         )} not equal to b[${i}]=>${JSON.stringify(bElement)}`
-    //     );
-    //   }
-    // }
+    // // return sendTextgenNonStreamingResponse(props);
+    // return { done: true };
 };
-
-const assertEqual = (a, b, message = () => {
-    console.error(a, b);
-    return `Assertion failed: ${JSON.stringify(a)} is not equal to ${JSON.stringify(b)}`;
-}) => {
-    if (Array.isArray(a) && Array.isArray(b)) {
-        return assertEqualElements(a, b, message);
-    }
-    return assert$1(a === b, message);
-};
-
-const assertNotEqual = (a, b, message = () => {
-    console.error(a, b);
-    return `Assertion failed: ${JSON.stringify(a)} is equal to ${JSON.stringify(b)}`;
-}) => {
-    // if (Array.isArray(a) && Array.isArray(b)) {
-    //   return assertEqualElements(a, b, message);
-    // }
-    return assert$1(a !== b, message);
-};
-
-function assertType$1(value, typeGuard, message = "Assertion failed: Required value is not of correct type") {
-    if (!typeGuard(value)) {
-        throw new Error(toMessage(message));
-    }
-    return value;
-}
-
-function assertUnreachable$1(value, message = "Assertion failed: Reached what should be an unreachable section of code") {
-    throw new Error(toMessage(message));
-}
-
-function isValue(maybe) {
-    return maybe !== undefined && maybe !== null && !Number.isNaN(maybe);
-}
-
-function assertValue$1(maybe, message = "Assertion failed: Required value not defined") {
-    assert$1(isValue(maybe), message);
-    return maybe;
-}
-
-const Asserts = {
-    assert: assert$1,
-    assertUnreachable: assertUnreachable$1,
-    assertValue: assertValue$1,
-    assertEqual,
-    assertNotEqual,
-    assertEqualElements,
-    assertType: assertType$1,
-};
-
-const { assert, assertValue, assertUnreachable, assertType } = Asserts;
 
 const initConnection = async (env) => {
     const url = assertValue(env.NATS_URL);

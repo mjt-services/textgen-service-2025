@@ -1,7 +1,6 @@
-import type { Env } from "./Env";
-import { initConnection } from "./initConnection";
+import { getConnection } from "./getConnection";
 
 // Main function to start the service
-export const main = async (env: Env) => {
-  await initConnection(env);
+export const main = async () => {
+  await getConnection();
 };
