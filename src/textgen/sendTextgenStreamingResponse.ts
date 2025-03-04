@@ -60,7 +60,7 @@ export const sendTextgenStreamingResponse: ConnectionListener<
       }
     });
   if (!response || !response.ok || !response.body) {
-    throw new Error(`Bad response: ${response?.status}`, { cause: response });
+    throw new Error(`Bad response: ${response?.status}`, { cause: detail });
   }
 
   const pipe = response.body.pipeThrough(stream);
