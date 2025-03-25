@@ -1,8 +1,10 @@
-import { toTextgenExtendedBody } from "./toTextgenExtendedBody";
-import type { Env } from "../Env";
+import { Asserts } from "@mjt-engine/assert";
 import type { TextgenConnectionMap } from "@mjt-services/textgen-common-2025";
+import type { Env } from "../Env";
+import { getEnv } from "../getEnv";
+import { toTextgenExtendedBody } from "./toTextgenExtendedBody";
 
-export const toLocalTextgenFetchParams = ({
+export const toOobaboogaTextgenFetchParams = ({
   request,
   headers = {},
   env,
@@ -12,11 +14,12 @@ export const toLocalTextgenFetchParams = ({
   env: Env;
 }) => {
   const { options } = request;
+  const envUrl = Asserts.assertValue(getEnv().LLM_URL);
   const {
     authToken = env.LOCAL_AUTH_TOKEN,
     url = options?.promptStyle === "raw"
-      ? "http://10.0.0.9:5000/v1/completions"
-      : "http://10.0.0.9:5000/v1/chat/completions",
+      ? `${envUrl}/v1/completions`
+      : `${envUrl}/v1/chat/completions`,
   } = headers;
 
   return {

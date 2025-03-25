@@ -1,3 +1,4 @@
+import { isDefined } from "@mjt-engine/object";
 import {
   type TextgenConnectionMap,
   type OobaboogaTextgenRequest,
@@ -26,5 +27,7 @@ export const toTextgenExtendedBody = (
     messages: promptStyle === "raw" ? undefined : body.messages,
     stop,
   };
-  return extendedBody;
+  return Object.fromEntries(
+    Object.entries(extendedBody).filter((k, v) => isDefined(v))
+  );
 };

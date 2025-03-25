@@ -1,7 +1,7 @@
-import { toLocalTextgenFetchParams } from "./toLocalTextgenFetchParams";
-import { toOpenRouterTextgenFetchParams } from "./toOpenRouterTextgenFetchParams";
-import type { Env } from "../Env";
 import type { TextgenConnectionMap } from "@mjt-services/textgen-common-2025";
+import type { Env } from "../Env";
+import { toOobaboogaTextgenFetchParams } from "./toOobaboogaTextgenFetchParams";
+import { toOpenAiTextgenFetchParams } from "./toOpenAiTextgenFetchParams";
 
 export const toTextgenFetchParams = ({
   request,
@@ -13,13 +13,13 @@ export const toTextgenFetchParams = ({
   env: Env;
 }) => {
   const { options = {} } = request;
-  const { provider = "openrouter" } = options;
+  const { provider = "openai" } = options;
   switch (provider) {
-    case "local": {
-      return toLocalTextgenFetchParams({ request, headers, env });
+    case "oobabooga": {
+      return toOobaboogaTextgenFetchParams({ request, headers, env });
     }
-    case "openrouter": {
-      return toOpenRouterTextgenFetchParams({ request, headers, env });
+    case "openai": {
+      return toOpenAiTextgenFetchParams({ request, headers, env });
     }
   }
   throw new Error(`unknown provider: ${provider}`);

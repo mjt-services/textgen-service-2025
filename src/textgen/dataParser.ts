@@ -1,9 +1,6 @@
 import { safe } from "@mjt-engine/object";
-import { logDebug } from "./logDebug";
-
 
 export const dataParser = (data: string) => {
-  logDebug("data", data);
   // if (signal?.aborted) {
   //   return undefined;
   // }

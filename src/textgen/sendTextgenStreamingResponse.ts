@@ -12,13 +12,14 @@ import {
   DEFAULT_STOP,
 } from "@mjt-services/textgen-common-2025";
 import { Parsers } from "@mjt-engine/parse";
+import { Asserts } from "@mjt-engine/assert";
+import { isDefined } from "@mjt-engine/object";
+import { streamNdJsonResponse } from "./streamNdJsonResponse";
 export const sendTextgenStreamingResponse: ConnectionListener<
   TextgenConnectionMap,
   "textgen.generate",
   Env
 > = async ({ signal, detail, headers, send, sendError, env }) => {
-  const stream = new TextDecoderStream();
-  const buffer: string[] = [];
   const finishedConsumingAbortController = new AbortController();
   const finishedConsumingSignal = finishedConsumingAbortController.signal;
   const onAbort = () => {
@@ -34,19 +35,21 @@ export const sendTextgenStreamingResponse: ConnectionListener<
     env,
   });
 
-  logDebug("message.detail", {
+  console.log("message.detail", {
     url,
-    body,
     authToken,
+    body: JSON.stringify(body, null, 2),
   });
-  const response = await fetch(url, {
+  const response = await fetch(Asserts.assertValue(url), {
     method: "POST",
     // signal,
     signal: finishedConsumingSignal,
-    headers: {
-      Authorization: `Bearer ${authToken} `,
-      "Content-Type": "application/json",
-    },
+    headers: [
+      isDefined(authToken)
+        ? (["Authorization", `Bearer ${authToken} `] as [string, string])
+        : undefined,
+      ["Content-Type", "application/json"] as [string, string],
+    ].filter(isDefined),
     body: JSON.stringify(body),
   })
     .catch((error) => {
@@ -62,28 +65,53 @@ export const sendTextgenStreamingResponse: ConnectionListener<
   if (!response || !response.ok || !response.body) {
     throw new Error(`Bad response: ${response?.status}`, { cause: detail });
   }
+  const contentType = response.headers.get("Content-Type");
+  console.log("contentType", contentType);
 
-  const pipe = response.body.pipeThrough(stream);
-  const reader = pipe.getReader();
+  const buffer: string[] = [];
+  if (contentType === "application/x-ndjson") {
+    await streamNdJsonResponse(response, {
+      onMessage: (chunk, full) => {
+        console.log("onMessage", { chunk, full });
+        buffer.push(chunk);
+        send({ delta: chunk, done: full?.done, text: buffer.join("") });
+      },
+      onDone: () => {
+        console.log("onDone");
+        send({ text: buffer.join(""), done: true });
+      },
+      onError: (error) => {
+        console.error(error);
+        sendError(error);
+      },
+    });
+  } else {
+    const stream = new TextDecoderStream();
+    const pipe = response.body.pipeThrough(stream);
+    const reader = pipe.getReader();
 
-  const { stop = [], stopAfter = [] } = detail.options ?? {};
+    const { stop = [], stopAfter = [] } = detail.options ?? {};
+    await Parsers.createSseParser({
+      signal,
 
-  await Parsers.createSseParser({
-    signal,
-    consumer: createConsumer({
-      buffer,
-      finishedConsumingAbortController,
-      send,
-      stop: [...DEFAULT_STOP, ...stop],
-      stopAfter,
-    }),
-    reader,
-    onError: async (error) => {
-      sendError(error);
-    },
-    onDone: () => {},
-    dataParser,
-  });
+      consumer: createConsumer({
+        buffer,
+        finishedConsumingAbortController,
+        send,
+        stop: [...DEFAULT_STOP, ...stop],
+        stopAfter,
+      }),
+      reader,
+      onError: async (error) => {
+        console.error(error);
+        sendError(error);
+      },
+      onDone: () => {},
+      dataParser,
+    });
+  }
+
   // send sentinel message to indicate that the stream is done
+  console.log("sending sentinel message");
   send();
 };

@@ -2,7 +2,7 @@ import type { TextgenConnectionMap } from "@mjt-services/textgen-common-2025";
 import type { Env } from "../Env";
 import { toTextgenExtendedBody } from "./toTextgenExtendedBody";
 
-export const toOpenRouterTextgenFetchParams = ({
+export const toOpenAiTextgenFetchParams = ({
   request,
   headers = {},
   env,
@@ -13,8 +13,11 @@ export const toOpenRouterTextgenFetchParams = ({
 }) => {
   console.log("toOpenRouterTextgenFetchParams: env", env);
   const {
-    authToken = env.OPEN_ROUTER_AUTH_TOKEN,
-    url = "https://openrouter.ai/api/v1/chat/completions",
+    authToken = env.LLM_AUTH_TOKEN,
+    // url = "https://openrouter.ai/api/v1/chat/completions",
+    // url = `${envUrl}/api/v1/chat/completions`,
+    // url = envUrl,
+    url = env.LLM_URL,
   } = headers;
 
   return {

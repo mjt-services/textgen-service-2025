@@ -32,7 +32,7 @@ export const createConsumer =
     value: OpenRouterTextgenResponse | OobaboogaTextgenResponse | undefined,
     done: boolean
   ) => {
-    // logDebug("consuming", { value, done });
+    console.log("consuming", { value, done });
     try {
       if (isOpenrouterStreamingChoice(value)) {
         if (isDefined(value.finish_reason)) {

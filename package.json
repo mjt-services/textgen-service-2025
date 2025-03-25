@@ -18,7 +18,7 @@
     "docker-build": "scripts/build.sh",
     "docker-run": "scripts/run.sh",
     "docker-push": "scripts/push.sh",
-    "dev": "pnpm run build && pnpm run docker-run"
+    "dev": "pnpm run build && pnpm run docker-run && docker logs -f textgen"
   },
   "keywords": [],
   "author": "Matt Taylor (https://mjt.dev)",
@@ -31,7 +31,7 @@
     "@mjt-services/textgen-common-2025": "github:mjt-services/textgen-common-2025"
   },
   "devDependencies": {
-    "@types/node": "^22.13.9",
+    "@types/node": "^22.13.13",
     "tslib": "^2.8.1",
     "tsx": "^4.19.3",
     "typedoc": "^0.27.9",
