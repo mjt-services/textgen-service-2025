@@ -22,7 +22,10 @@ importers:
         version: https://codeload.github.com/mjt-engine/parse/tar.gz/0cfe4e6756c4a38311ad98f3a5a811834f2b1b80
       '@mjt-services/textgen-common-2025':
         specifier: github:mjt-services/textgen-common-2025
-        version: https://codeload.github.com/mjt-services/textgen-common-2025/tar.gz/ad67ae236424b23b155c94e79a05e169817f6f0c
+        version: https://codeload.github.com/mjt-services/textgen-common-2025/tar.gz/de7a02bf80379b72bc04b953b8d4743e4b59b4c3
+      decimal.js:
+        specifier: ^10.5.0
+        version: 10.5.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.13
@@ -217,9 +220,9 @@ packages:
     resolution: {tarball: https://codeload.github.com/mjt-engine/parse/tar.gz/0cfe4e6756c4a38311ad98f3a5a811834f2b1b80}
     version: 2025.1.19-1222
 
-  '@mjt-services/textgen-common-2025@https://codeload.github.com/mjt-services/textgen-common-2025/tar.gz/ad67ae236424b23b155c94e79a05e169817f6f0c':
-    resolution: {tarball: https://codeload.github.com/mjt-services/textgen-common-2025/tar.gz/ad67ae236424b23b155c94e79a05e169817f6f0c}
-    version: 2025.3.24-1508
+  '@mjt-services/textgen-common-2025@https://codeload.github.com/mjt-services/textgen-common-2025/tar.gz/de7a02bf80379b72bc04b953b8d4743e4b59b4c3':
+    resolution: {tarball: https://codeload.github.com/mjt-services/textgen-common-2025/tar.gz/de7a02bf80379b72bc04b953b8d4743e4b59b4c3}
+    version: 2025.3.25-1627
 
   '@msgpackr-extract/msgpackr-extract-darwin-arm64@3.0.3':
     resolution: {integrity: sha512-QZHtlVgbAdy2zAqNA9Gu1UpIuI8Xvsd1v8ic6B2pZmeFnFcMWiPLfWXh7TVw4eGEZ/C9TH281KwhVoeQUKbyjw==}
@@ -292,6 +295,9 @@ packages:
   call-bound@1.0.4:
     resolution: {integrity: sha512-+ys997U96po4Kx/ABpBCqhA9EuxJaQWDQg7295H4hBphv3IZg0boBKuwYpt4YXp6MZ5AmZQnU/tyMTlRpaSejg==}
     engines: {node: '>= 0.4'}
+
+  decimal.js@10.5.0:
+    resolution: {integrity: sha512-8vDa8Qxvr/+d94hSh5P3IJwI5t8/c0KsMp+g8bNw9cY2icONa5aPfvKeieW1WlG0WQYwwhJ7mjui2xtiePQSXw==}
 
   define-data-property@1.1.4:
     resolution: {integrity: sha512-rBMvIzlpA8v6E+SJZoo++HAYqsLrkg7MSfIinMPFhmkorw7X+dOXVJQs+QT69zGkzMyfDnIMN2Wid1+NbL3T+A==}
@@ -563,7 +569,7 @@ snapshots:
     dependencies:
       '@mjt-engine/object': https://codeload.github.com/mjt-engine/object/tar.gz/75263a186b55c31764efb3a1bc075285f971946b
 
-  '@mjt-services/textgen-common-2025@https://codeload.github.com/mjt-services/textgen-common-2025/tar.gz/ad67ae236424b23b155c94e79a05e169817f6f0c':
+  '@mjt-services/textgen-common-2025@https://codeload.github.com/mjt-services/textgen-common-2025/tar.gz/de7a02bf80379b72bc04b953b8d4743e4b59b4c3':
     dependencies:
       '@mjt-engine/object': https://codeload.github.com/mjt-engine/object/tar.gz/75263a186b55c31764efb3a1bc075285f971946b
 
@@ -633,6 +639,8 @@ snapshots:
     dependencies:
       call-bind-apply-helpers: 1.0.2
       get-intrinsic: 1.3.0
+
+  decimal.js@10.5.0: {}
 
   define-data-property@1.1.4:
     dependencies:

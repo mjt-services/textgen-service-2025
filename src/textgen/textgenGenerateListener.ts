@@ -10,6 +10,7 @@ export const textgenGenerateListener: ConnectionListener<
   if (stream) {
     return sendTextgenStreamingResponse(props);
   }
-  // return sendTextgenNonStreamingResponse(props);
   return { done: true };
 };
+
+

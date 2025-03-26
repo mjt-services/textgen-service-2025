@@ -28,7 +28,8 @@
     "@mjt-engine/message": "github:mjt-engine/message",
     "@mjt-engine/object": "github:mjt-engine/object",
     "@mjt-engine/parse": "github:mjt-engine/parse",
-    "@mjt-services/textgen-common-2025": "github:mjt-services/textgen-common-2025"
+    "@mjt-services/textgen-common-2025": "github:mjt-services/textgen-common-2025",
+    "decimal.js": "^10.5.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.13",
