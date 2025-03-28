@@ -6,6 +6,7 @@ import {
   TEXTGEN_CHAT_TEMPLATES,
   Textgens,
 } from "@mjt-services/textgen-common-2025";
+import { getEnv } from "../getEnv";
 
 export const toTextgenExtendedBody = (
   request: TextgenConnectionMap["textgen.generate"]["request"]
@@ -16,6 +17,7 @@ export const toTextgenExtendedBody = (
 
   const extendedBody: OobaboogaTextgenRequest & OpenRouterTextgenRequest = {
     max_tokens: 256,
+    model: getEnv().LLM_MODEL,
     prompt:
       promptStyle === "raw"
         ? Textgens.chatMessagesToPromptText({

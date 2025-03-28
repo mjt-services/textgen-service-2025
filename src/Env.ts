@@ -4,6 +4,7 @@ export type Env = Partial<{
   LOCAL_AUTH_TOKEN: string;
   NATS_AUTH_TOKEN: string;
   LLM_URL: string;
+  LLM_MODEL: string;
   EMBEDDING_URL: string;
   EMBEDDING_MODEL: string;
 }>;
