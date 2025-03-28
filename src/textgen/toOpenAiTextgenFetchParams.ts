@@ -11,14 +11,7 @@ export const toOpenAiTextgenFetchParams = ({
   headers?: TextgenConnectionMap["textgen.generate"]["headers"];
   env: Env;
 }) => {
-  console.log("toOpenRouterTextgenFetchParams: env", env);
-  const {
-    authToken = env.LLM_AUTH_TOKEN,
-    // url = "https://openrouter.ai/api/v1/chat/completions",
-    // url = `${envUrl}/api/v1/chat/completions`,
-    // url = envUrl,
-    url = env.LLM_URL,
-  } = headers;
+  const { authToken = env.LLM_AUTH_TOKEN, url = env.LLM_URL } = headers;
 
   return {
     url,

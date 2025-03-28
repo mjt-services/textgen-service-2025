@@ -42,7 +42,6 @@ export const sendTextgenStreamingResponse: ConnectionListener<
   });
   const response = await fetch(Asserts.assertValue(url), {
     method: "POST",
-    // signal,
     signal: finishedConsumingSignal,
     headers: [
       isDefined(authToken)
@@ -66,7 +65,6 @@ export const sendTextgenStreamingResponse: ConnectionListener<
     throw new Error(`Bad response: ${response?.status}`, { cause: detail });
   }
   const contentType = response.headers.get("Content-Type");
-  console.log("contentType", contentType);
 
   const buffer: string[] = [];
   if (contentType === "application/x-ndjson") {
