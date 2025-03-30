@@ -10,7 +10,5 @@ export const textgenGenerateListener: ConnectionListener<
   if (stream) {
     return sendTextgenStreamingResponse(props);
   }
-  return { done: true };
+  throw new Error("non-stream generation is not supported");
 };
-
-
