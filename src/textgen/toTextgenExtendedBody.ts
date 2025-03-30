@@ -13,21 +13,21 @@ export const toTextgenExtendedBody = (
   request: TextgenConnectionMap["textgen.generate"]["request"]
 ) => {
   const { body, options = {} } = request;
-  const { promptStyle = "message", templateType = "chatML", stop } = options;
+  const { promptStyle = "raw", templateType = "chatML", stop } = options;
   const defaultModel = assertValue(getEnv().LLM_MODEL);
 
   const extendedBody: OobaboogaTextgenRequest & OpenRouterTextgenRequest = {
     max_tokens: 256,
     model: defaultModel,
-    prompt:
-      promptStyle === "raw"
-        ? Textgens.chatMessagesToPromptText({
-            messages: body.messages ?? [],
-            messageTemplate: TEXTGEN_CHAT_TEMPLATES[templateType],
-          })
-        : undefined,
+    // prompt:
+    //   promptStyle === "raw"
+    //     ? Textgens.chatMessagesToPromptText({
+    //         messages: body.messages ?? [],
+    //         messageTemplate: TEXTGEN_CHAT_TEMPLATES[templateType],
+    //       })
+    //     : undefined,
+    // messages: promptStyle === "raw" ? undefined : body.messages,
     ...removeUndefinedValues(body),
-    messages: promptStyle === "raw" ? undefined : body.messages,
     stop,
   };
   return removeUndefinedValues(extendedBody);
