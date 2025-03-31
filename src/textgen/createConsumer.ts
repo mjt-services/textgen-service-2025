@@ -68,7 +68,6 @@ export const createConsumer =
       }
 
       if (isDefined(fullStoppedTextFragment)) {
-        console.log(delta ?? "<empty>");
         send({
           delta: delta ?? undefined,
           text: fullStoppedTextFragment,

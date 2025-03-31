@@ -35,11 +35,7 @@ export const sendTextgenStreamingResponse: ConnectionListener<
     env,
   });
 
-  console.log("message.detail", {
-    url,
-    authToken,
-    body: JSON.stringify(body, null, 2),
-  });
+  console.log(JSON.stringify(body.messages, null, 2));
   const response = await fetch(Asserts.assertValue(url), {
     method: "POST",
     signal: finishedConsumingSignal,
@@ -110,6 +106,5 @@ export const sendTextgenStreamingResponse: ConnectionListener<
   }
 
   // send sentinel message to indicate that the stream is done
-  console.log("sending sentinel message");
   send();
 };
