@@ -6,9 +6,12 @@ services:
     env_file:
       - ./.env
       - ./../.env
+    develop:
+      watch:
+        - path: .
+          action: rebuild
     build:
       context: .
       dockerfile: Dockerfile
     stdin_open: true
     tty: true
-

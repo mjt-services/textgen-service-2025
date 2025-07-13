@@ -35,7 +35,7 @@ export const sendTextgenStreamingResponse: ConnectionListener<
     env,
   });
 
-  console.log(JSON.stringify(body.messages, null, 2));
+  // console.log(JSON.stringify(body.messages, null, 2));
   const response = await fetch(Asserts.assertValue(url), {
     method: "POST",
     signal: finishedConsumingSignal,
