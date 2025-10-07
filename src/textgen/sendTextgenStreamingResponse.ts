@@ -66,12 +66,10 @@ export const sendTextgenStreamingResponse: ConnectionListener<
   if (contentType === "application/x-ndjson") {
     await streamNdJsonResponse(response, {
       onMessage: (chunk, full) => {
-        console.log("onMessage", { chunk, full });
         buffer.push(chunk);
         send({ delta: chunk, done: full?.done, text: buffer.join("") });
       },
       onDone: () => {
-        console.log("onDone");
         send({ text: buffer.join(""), done: true });
       },
       onError: (error) => {

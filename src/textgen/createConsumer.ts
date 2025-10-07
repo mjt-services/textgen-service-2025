@@ -45,7 +45,6 @@ export const createConsumer =
         ? choice.text
         : undefined;
       buffer.push(delta ?? "");
-      console.log(delta);
 
       const bufferText = buffer.join("");
       const [fullStoppedTextFragment, fullStopped] = Parsers.detectStop(
